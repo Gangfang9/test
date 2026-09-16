@@ -15,6 +15,12 @@
     "main": "欢迎来到 Scrcpy Mask 👏🏻"
   },
   "devices": {
+    "mvp": {
+      "title": "USB 设备连接",
+      "message": "第一版仅支持一台 USB ADB 设备",
+      "description": "请在手机上开启 USB 调试并授权此电脑，然后刷新设备并点击控制。投屏固定开启，声音和无线 ADB 暂不启用。",
+      "mode": "USB 投屏"
+    },
     "adbTools": {
       "title": "ADB工具",
       "pair": {

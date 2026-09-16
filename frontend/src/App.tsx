@@ -10,13 +10,8 @@ import { useLocation, useOutlet } from "react-router-dom";
 import KeepAlive, { useKeepAliveRef } from "keepalive-for-react";
 import LoadingWrapper from "./components/common/LoadingWrapper";
 import { requestGet } from "./utils";
-import {
-  setIsLoading,
-  setShowUpdateDialog,
-  setUpdateInfo,
-} from "./store/other";
+import { setIsLoading } from "./store/other";
 import i18n from "./i18n";
-import UpdateDialog from "./components/common/UpdateDialog";
 
 function App() {
   const dispatch = useAppDispatch();
@@ -29,26 +24,6 @@ function App() {
 
   const outlet = useOutlet();
 
-  async function getUpdateInfo() {
-    try {
-      const res = await requestGet("/api/config/get_update_info");
-      dispatch(
-        setUpdateInfo({
-          currentVersion: res.data.current_version,
-          hasUpdate: res.data.has_update,
-          latestVersion: res.data.latest_version,
-          title: res.data.title,
-          body: res.data.body,
-          time: res.data.time,
-        })
-      );
-      if (res.data.has_update) {
-        dispatch(setShowUpdateDialog(true));
-      }
-    } catch (err: any) {
-      messageApi?.error(err);
-    }
-  }
   async function loadLocalConfig() {
     try {
       const res = await requestGet("/api/config/get_config");
@@ -63,7 +38,6 @@ function App() {
     staticStore.messageApi = messageApi;
     dispatch(setIsLoading(true));
     loadLocalConfig();
-    getUpdateInfo();
     dispatch(setIsLoading(false));
 
     // prevent backward
@@ -82,7 +56,6 @@ function App() {
     <MessageContext.Provider value={messageApi}>
       {contextHolder}
       <Spin spinning={isLoading} fullscreen delay={200} />
-      <UpdateDialog />
       <Layout className="min-h-100vh">
         <Sider />
         <Layout>

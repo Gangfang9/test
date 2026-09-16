@@ -1,11 +1,11 @@
 import {
+  Alert,
   Badge,
   Button,
   Checkbox,
   Descriptions,
   Dropdown,
   Flex,
-  Input,
   Modal,
   Popover,
   Select,
@@ -42,13 +42,11 @@ import {
   UpOutlined,
 } from "@ant-design/icons";
 import IconButton from "./common/IconButton";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { ItemBox, ItemBoxContainer } from "./common/ItemBox";
+import { useEffect, useMemo, useState } from "react";
 import { setAdbDevices, setControlledDevices, setIsLoading } from "../store/other";
 import { useMessageContext } from "../hooks";
 import { useAppDispatch, useAppSelector } from "../store/store";
 import { useLocation } from "react-router-dom";
-import { setAdbConnectAddress } from "../store/localConfig";
 
 function ControlledDevices({
   isVideo,
@@ -530,27 +528,20 @@ function ControlledDevices({
 
 function OtherDevices({
   otherDevices,
-  videoState,
-  audioState,
 }: {
   otherDevices: AdbDevice[];
-  videoState: [boolean, React.Dispatch<React.SetStateAction<boolean>>];
-  audioState: [boolean, React.Dispatch<React.SetStateAction<boolean>>];
 }) {
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const messageApi = useMessageContext();
-
-  const [isVideo, setIsVideo] = videoState;
-  const [isAudio, setIsAudio] = audioState;
 
   async function controlDevice(device: AdbDevice) {
     dispatch(setIsLoading(true));
     try {
       const res = await requestPost("/api/device/control_device", {
         device_id: device.id,
-        video: isVideo,
-        audio: isAudio,
+        video: true,
+        audio: false,
       });
       messageApi?.success(res.message);
     } catch (error) {
@@ -572,22 +563,7 @@ function OtherDevices({
     },
     {
       title: (
-        <Flex vertical align="center" gap={4}>
-          <Space size="small">
-            <Checkbox
-              checked={isVideo}
-              onChange={(e) => setIsVideo(e.target.checked)}
-            >
-              {t("devices.otherDevices.video")}
-            </Checkbox>
-            <Checkbox
-              checked={isAudio}
-              onChange={(e) => setIsAudio(e.target.checked)}
-            >
-              {t("devices.otherDevices.audio")}
-            </Checkbox>
-          </Space>
-        </Flex>
+        <span>{t("devices.mvp.mode")}</span>
       ),
       key: "action",
       align: "center",
@@ -622,40 +598,27 @@ export default function Devices() {
   const dispatch = useAppDispatch();
   const location = useLocation();
 
-  const savedConnectAddr = useAppSelector(
-    (state) => state.localConfig.adbConnectAddress,
-  );
-  const [connectAddr, setConnectAddr] = useState("");
-  const [pairAddr, setPairAddr] = useState("");
-  const [pairCode, setPairCode] = useState("");
-  const connectAddrEditedRef = useRef(false);
-
   const controlledDevices = useAppSelector(
     (state) => state.other.controlledDevices,
   );
   const adbDevices = useAppSelector((state) => state.other.adbDevices);
   const otherDevices = useMemo(() => {
     const controlledIdSet = new Set(controlledDevices.map((d) => d.device_id));
-    return adbDevices.filter((d) => !controlledIdSet.has(d.id));
+    return adbDevices.filter(
+      (d) =>
+        !controlledIdSet.has(d.id) &&
+        !d.id.includes(":") &&
+        !d.id.startsWith("emulator-") &&
+        !d.id.includes("._adb-tls-"),
+    );
   }, [controlledDevices, adbDevices]);
 
-  const videoState = useState(false);
+  const videoState = useState(true);
   const audioState = useState(false);
 
   useEffect(() => {
     if (location.pathname === "/devices") refreshDevices();
   }, [location.pathname]);
-
-  useEffect(() => {
-    if (!connectAddrEditedRef.current) {
-      setConnectAddr(savedConnectAddr);
-    }
-  }, [savedConnectAddr]);
-
-  function changeConnectAddr(value: string) {
-    connectAddrEditedRef.current = true;
-    setConnectAddr(value);
-  }
 
   async function refreshDevices() {
     dispatch(setIsLoading(true));
@@ -667,39 +630,6 @@ export default function Devices() {
       dispatch(setControlledDevices(res.data.controlled_devices));
       dispatch(setAdbDevices(res.data.adb_devices));
       messageApi?.success(res.message);
-    } catch (error) {
-      messageApi?.error(error as string);
-    }
-    dispatch(setIsLoading(false));
-  }
-
-  async function pairDevice() {
-    dispatch(setIsLoading(true));
-    try {
-      const res = await requestPost("/api/device/adb_pair", {
-        address: pairAddr,
-        code: pairCode,
-      });
-      messageApi?.success(res.message);
-      setTimeout(refreshDevices, 1000);
-    } catch (error) {
-      messageApi?.error(error as string);
-    }
-    dispatch(setIsLoading(false));
-  }
-
-  async function connectDevice() {
-    const address = connectAddr.trim();
-    dispatch(setIsLoading(true));
-    try {
-      const res = await requestPost("/api/device/adb_connect", {
-        address,
-      });
-      messageApi?.success(res.message);
-      connectAddrEditedRef.current = false;
-      setConnectAddr(address);
-      dispatch(setAdbConnectAddress(address));
-      setTimeout(refreshDevices, 1000);
     } catch (error) {
       messageApi?.error(error as string);
     }
@@ -725,47 +655,21 @@ export default function Devices() {
   return (
     <div className="page-container">
       <section>
-        <h2 className="title-with-line">{t("devices.adbTools.title")}</h2>
-        <ItemBoxContainer className="mb-6">
-          <ItemBox label={t("devices.adbTools.pair.label")}>
-            <Space.Compact>
-              <Input
-                placeholder="ip:port"
-                value={pairAddr}
-                onChange={(e) => setPairAddr(e.target.value)}
-              />
-              <Input
-                placeholder="code"
-                value={pairCode}
-                onChange={(e) => setPairCode(e.target.value)}
-              />
-              <Button type="primary" onClick={pairDevice}>
-                {t("devices.adbTools.pair.btn")}
-              </Button>
-            </Space.Compact>
-          </ItemBox>
-          <ItemBox label={t("devices.adbTools.connect.label")}>
-            <Space.Compact>
-              <Input
-                placeholder="ip:port"
-                value={connectAddr}
-                onChange={(e) => changeConnectAddr(e.target.value)}
-              />
-              <Button type="primary" onClick={connectDevice}>
-                {t("devices.adbTools.connect.btn")}
-              </Button>
-            </Space.Compact>
-          </ItemBox>
-          <ItemBox label={t("devices.adbTools.server.label")}>
-            <Button
-              type="primary"
-              icon={<ReloadOutlined />}
-              onClick={restartAdbServer}
-            >
-              {t("devices.adbTools.server.restart")}
-            </Button>
-          </ItemBox>
-        </ItemBoxContainer>
+        <h2 className="title-with-line">{t("devices.mvp.title")}</h2>
+        <Alert
+          className="mb-4"
+          type="info"
+          showIcon
+          message={t("devices.mvp.message")}
+          description={t("devices.mvp.description")}
+        />
+        <Button
+          className="mb-6"
+          icon={<ReloadOutlined />}
+          onClick={restartAdbServer}
+        >
+          {t("devices.adbTools.server.restart")}
+        </Button>
       </section>
       <section>
         <Flex justify="space-between" align="start">
@@ -789,8 +693,6 @@ export default function Devices() {
         <h2 className="title-with-line">{t("devices.otherDevices.title")}</h2>
         <OtherDevices
           otherDevices={otherDevices}
-          videoState={videoState}
-          audioState={audioState}
         />
       </section>
     </div>

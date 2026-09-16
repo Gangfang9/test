@@ -49,8 +49,6 @@ pub fn routers(
         .route("/control_device", post(control_device))
         .route("/decontrol_device", post(decontrol_device))
         .route("/reconnect_device", post(reconnect_device))
-        .route("/adb_connect", post(adb_connect))
-        .route("/adb_pair", post(adb_pair))
         .route("/adb_restart", post(adb_restart))
         .route("/adb_screenshot", post(adb_screenshot))
         .route("/adb_apps", post(adb_apps))
@@ -67,7 +65,10 @@ async fn device_list() -> Result<JsonResponse, WebServerError> {
     let config = LocalConfig::get();
     let all_devices = Adb::new(config.adb_path)
         .devices()
-        .map_err(|e| WebServerError::internal_error(e))?;
+        .map_err(|e| WebServerError::internal_error(e))?
+        .into_iter()
+        .filter(|device| is_usb_device_id(&device.id))
+        .collect::<Vec<_>>();
 
     Ok(JsonResponse::success(
         t!("web.device.deviceListObtained"),
@@ -86,38 +87,40 @@ fn gen_scid() -> String {
     format!("10{}", suffix) // ensure 8 digits(HEX) and less than MAX_INT32
 }
 
+fn is_usb_device_id(device_id: &str) -> bool {
+    !device_id.contains(':')
+        && !device_id.starts_with("emulator-")
+        && !device_id.contains("._adb-tls-")
+}
+
 #[derive(Deserialize)]
 struct PostDataControlDevice {
     device_id: String,
-    video: bool,
-    #[serde(default)]
-    audio: bool,
 }
 
 async fn _control_device(
     device_id: &str,
-    video: bool,
-    audio: bool,
     d_tx: &UnboundedSender<ControllerCommand>,
     ws_tx: &broadcast::Sender<WebSocketNotification>,
 ) -> Result<JsonResponse, WebServerError> {
     let device_id = device_id.to_string();
+    let video = true;
+    let audio = false;
     let local_config = LocalConfig::get();
 
-    let device_list = ControlledDevice::get_device_list().await;
-    // check if device is controlled
-    if device_list
-        .iter()
-        .any(|device| device.device_id == device_id)
-    {
-        return Err(WebServerError::bad_request(format!(
-            "{}: {}",
-            t!("web.device.alreadyControlled"),
-            device_id
-        )));
+    if !is_usb_device_id(&device_id) {
+        return Err(WebServerError::bad_request(
+            "The MVP supports physical USB ADB devices only".to_string(),
+        ));
     }
-    let main = device_list.len() == 0;
-    let audio = audio && main;
+
+    let device_list = ControlledDevice::get_device_list().await;
+    if !device_list.is_empty() {
+        return Err(WebServerError::bad_request(
+            "The MVP supports one controlled device at a time".to_string(),
+        ));
+    }
+    let main = true;
 
     // prepare for scrcpy app
     let scid = gen_scid();
@@ -266,18 +269,13 @@ async fn control_device(
     Json(payload): Json<PostDataControlDevice>,
 ) -> Result<JsonResponse, WebServerError> {
     let device_id = payload.device_id;
-    let video = payload.video;
-    let audio = payload.audio;
 
-    _control_device(&device_id, video, audio, &state.d_tx, &state.ws_tx).await
+    _control_device(&device_id, &state.d_tx, &state.ws_tx).await
 }
 
 #[derive(Deserialize)]
 struct PostDataReconnectDevice {
     device_id: String,
-    video: bool,
-    #[serde(default)]
-    audio: bool,
 }
 
 async fn reconnect_device(
@@ -289,14 +287,7 @@ async fn reconnect_device(
     for device in device_list {
         if device.device_id == device_id {
             _decontrol_device(&device_id, &state.d_tx).await?;
-            _control_device(
-                &device_id,
-                payload.video,
-                payload.audio,
-                &state.d_tx,
-                &state.ws_tx,
-            )
-            .await?;
+            _control_device(&device_id, &state.d_tx, &state.ws_tx).await?;
             return Ok(JsonResponse::success(
                 format!("{}: {}", t!("web.device.reconnectDevice"), device_id),
                 None,
@@ -308,6 +299,27 @@ async fn reconnect_device(
         t!("web.device.deviceNotFound"),
         device_id
     )))
+}
+
+#[cfg(test)]
+mod mvp_tests {
+    use super::is_usb_device_id;
+
+    #[test]
+    fn accepts_physical_usb_serials() {
+        assert!(is_usb_device_id("R58M1234ABC"));
+        assert!(is_usb_device_id("1A2B3C4D5E"));
+    }
+
+    #[test]
+    fn rejects_network_and_emulator_transports() {
+        assert!(!is_usb_device_id("192.168.1.20:5555"));
+        assert!(!is_usb_device_id("phone.local:5555"));
+        assert!(!is_usb_device_id("emulator-5554"));
+        assert!(!is_usb_device_id(
+            "adb-R58M1234ABC-abc123._adb-tls-connect._tcp"
+        ));
+    }
 }
 
 #[derive(Deserialize)]

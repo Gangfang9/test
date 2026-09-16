@@ -18,10 +18,10 @@ use scrcpy_mask::{
         control_msg::ScrcpyControlMsg,
         controller::{self, ControllerCommand},
     },
-    tokio_tasks::{TokioTasksPlugin, TokioTasksRuntime},
+    tokio_tasks::TokioTasksPlugin,
     utils::{
         ChannelReceiverM, ChannelReceiverV, ChannelSenderCS, ChannelSenderD, ChannelSenderWS,
-        LatestVideoFrame, check_for_update, relate_to_data_path,
+        LatestVideoFrame, relate_to_data_path,
     },
     web::{self, ws::WebSocketNotification},
 };
@@ -78,7 +78,7 @@ fn main() {
             })
             .set(WindowPlugin {
                 primary_window: Some(Window {
-                    title: "scrcpy-mask".into(),
+                    title: "LE KeyMapper MVP".into(),
                     has_shadow: false,
                     transparent: true, // for windows: https://github.com/bevyengine/bevy/issues/7544
                     decorations: false,
@@ -100,7 +100,7 @@ fn main() {
     )
     .add_plugins(TokioTasksPlugin::default())
     .add_plugins(MaskPlugins)
-    .add_systems(Startup, (start_servers, check_for_update_system));
+    .add_systems(Startup, start_servers);
 
     #[cfg(target_os = "macos")]
     {
@@ -152,12 +152,4 @@ fn start_servers(mut commands: Commands) {
     commands.insert_resource(ChannelSenderWS(ws_tx.clone()));
     web::Server::start(web_addr, cs_tx.clone(), d_tx, m_tx.clone(), ws_tx.clone());
     controller::Controller::start(controller_addr, cs_tx, v_channel, d_rx, m_tx, ws_tx);
-}
-
-fn check_for_update_system(runtime: ResMut<TokioTasksRuntime>) {
-    runtime.spawn_background_task(move |_ctx| async move {
-        if let Err(e) = check_for_update().await {
-            log::error!("{}", e);
-        }
-    });
 }

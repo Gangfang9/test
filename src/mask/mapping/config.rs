@@ -16,7 +16,7 @@ use paste::paste;
 use rust_i18n::t;
 use seq_macro::seq;
 use serde::{Deserialize, Serialize};
-use serde_json::to_string_pretty;
+use serde_json::{json, to_string_pretty};
 use strum_macros::{AsRefStr, Display, EnumString};
 
 use crate::{
@@ -388,14 +388,60 @@ impl From<&BindMappingConfig> for InputConfig {
 pub struct ActiveMappingConfig(pub Option<BindMappingConfig>, pub String);
 
 pub fn default_mapping_config() -> MappingConfig {
-    MappingConfig {
-        version: "0.0.1".to_string(),
-        original_size: Size {
-            width: 2560,
-            height: 1440,
+    serde_json::from_value(json!({
+        "version": "0.1.0",
+        "original_size": {
+            "width": 1920,
+            "height": 1080
         },
-        mappings: vec![],
-    }
+        "mappings": [
+            {
+                "type": "DirectionPad",
+                "id": "mvp-wasd",
+                "note": "WASD movement",
+                "pointer_id": 1,
+                "position": { "x": 346, "y": 810 },
+                "initial_duration": 0,
+                "max_offset_x": 170.0,
+                "max_offset_y": 170.0,
+                "enable_randomization": false,
+                "bind": {
+                    "type": "Button",
+                    "up": ["KeyW"],
+                    "down": ["KeyS"],
+                    "left": ["KeyA"],
+                    "right": ["KeyD"]
+                },
+                "script_hooks": { "before_script": "", "after_script": "" }
+            },
+            {
+                "type": "Fps",
+                "id": "mvp-fps-view",
+                "note": "Press backquote to toggle FPS view",
+                "pointer_id": 2,
+                "position": { "x": 1094, "y": 432 },
+                "sensitivity_x": 0.25,
+                "sensitivity_y": 0.25,
+                "max_offset_x": 0.0,
+                "max_offset_y": 0.0,
+                "touch_mode": { "type": "single", "interval": 0 },
+                "bind": ["Backquote"]
+            },
+            {
+                "type": "Fire",
+                "id": "mvp-fire",
+                "note": "Left mouse button fire",
+                "pointer_id": 3,
+                "position": { "x": 1651, "y": 810 },
+                "preserve_fps_control": true,
+                "sensitivity_x": 0.25,
+                "sensitivity_y": 0.25,
+                "bind": ["M-Left"],
+                "script_hooks": { "before_script": "", "after_script": "" }
+            }
+        ]
+    }))
+    .expect("the built-in MVP mapping must be valid")
 }
 
 // Validate mapping config:
@@ -437,6 +483,40 @@ pub fn validate_mapping_config_diagnostics(
             .or_insert(1);
         let mapping_index = count as usize;
         let id = mapping.id();
+
+        if !matches!(
+            mapping,
+            MappingType::DirectionPad(_) | MappingType::Fps(_) | MappingType::Fire(_)
+        ) {
+            diagnostics.push(MappingDiagnostic::mapping(
+                "mapping.mvp.unsupportedType",
+                format!("{mapping_type} is not available in the MVP"),
+                mapping_type,
+                mapping_index,
+                id,
+            ));
+        }
+
+        let has_scripts = match mapping {
+            MappingType::DirectionPad(mapping) => {
+                !mapping.script_hooks.before_script.trim().is_empty()
+                    || !mapping.script_hooks.after_script.trim().is_empty()
+            }
+            MappingType::Fire(mapping) => {
+                !mapping.script_hooks.before_script.trim().is_empty()
+                    || !mapping.script_hooks.after_script.trim().is_empty()
+            }
+            _ => false,
+        };
+        if has_scripts {
+            diagnostics.push(MappingDiagnostic::mapping(
+                "mapping.mvp.scriptsDisabled",
+                "Mapping scripts are disabled in the MVP".to_string(),
+                mapping_type,
+                mapping_index,
+                id,
+            ));
+        }
 
         if count > 32 {
             diagnostics.push(MappingDiagnostic::mapping(
@@ -775,4 +855,67 @@ pub fn save_mapping_config(config: &MappingConfig, path: &Path) -> Result<(), St
         .map_err(|e| format!("{}: {}", t!("mask.mapping.cannotWriteMappingConfig"), e))?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod mvp_tests {
+    use super::{
+        MappingConfig, MappingType, default_mapping_config, validate_mapping_config,
+        validate_mapping_config_diagnostics,
+    };
+    use serde_json::json;
+
+    #[test]
+    fn default_mapping_contains_only_mvp_controls() {
+        let config = default_mapping_config();
+
+        assert_eq!(config.mappings.len(), 3);
+        assert!(matches!(config.mappings[0], MappingType::DirectionPad(_)));
+        assert!(matches!(config.mappings[1], MappingType::Fps(_)));
+        assert!(matches!(config.mappings[2], MappingType::Fire(_)));
+        assert!(validate_mapping_config(&config).is_ok());
+    }
+
+    #[test]
+    fn rejects_mapping_types_outside_the_mvp() {
+        let config: MappingConfig = serde_json::from_value(json!({
+            "version": "0.1.0",
+            "original_size": { "width": 1920, "height": 1080 },
+            "mappings": [{
+                "type": "SingleTap",
+                "id": "unsupported-tap",
+                "note": "",
+                "pointer_id": 1,
+                "position": { "x": 100, "y": 100 },
+                "bind": ["Space"],
+                "duration": 50,
+                "sync": false,
+                "script_hooks": { "before_script": "", "after_script": "" }
+            }]
+        }))
+        .unwrap();
+
+        let diagnostics = validate_mapping_config_diagnostics(&config);
+        assert!(
+            diagnostics
+                .iter()
+                .any(|item| item.code == "mapping.mvp.unsupportedType")
+        );
+    }
+
+    #[test]
+    fn rejects_mapping_scripts_in_the_mvp() {
+        let mut config = default_mapping_config();
+        let MappingType::DirectionPad(mapping) = &mut config.mappings[0] else {
+            panic!("expected the default WASD mapping");
+        };
+        mapping.script_hooks.before_script = "sleep(1)".to_string();
+
+        let diagnostics = validate_mapping_config_diagnostics(&config);
+        assert!(
+            diagnostics
+                .iter()
+                .any(|item| item.code == "mapping.mvp.scriptsDisabled")
+        );
+    }
 }

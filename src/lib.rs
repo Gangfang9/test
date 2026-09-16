@@ -17,7 +17,7 @@ rust_i18n::i18n!(
     minify_key_thresh = 64
 );
 
-pub const DEFAULT_LANGUAGE: &str = "en-US";
+pub const DEFAULT_LANGUAGE: &str = "zh-CN";
 
 pub fn available_languages() -> Vec<&'static str> {
     rust_i18n::available_locales!()

@@ -469,19 +469,9 @@ type EditState = {
 };
 
 const buttonTypes = [
-  "SingleTap",
-  "RepeatTap",
-  "MultipleTap",
-  "Swipe",
   "DirectionPad",
-  "MouseCastSpell",
-  "PadCastSpell",
-  "CancelCast",
-  "Observation",
   "Fps",
   "Fire",
-  "RawInput",
-  "Script",
 ];
 
 const mappingButtonMap = {

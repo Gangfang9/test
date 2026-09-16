@@ -1,0 +1,125 @@
+name: Build LE KeyMapper MVP for Windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - mvp-usb-single-device
+
+permissions:
+  contents: read
+
+env:
+  ANDROID_PLATFORM_TOOLS_VERSION: '37.0.0'
+
+jobs:
+  build-windows:
+    name: Windows x64
+    runs-on: windows-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '11'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install frontend dependencies
+        shell: pwsh
+        run: pnpm --dir frontend install --frozen-lockfile
+
+      - name: Check frontend
+        shell: pwsh
+        run: |
+          pnpm --dir frontend lint
+          pnpm --dir frontend exec tsc -b
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Set up MSYS2 and yasm
+        uses: msys2/setup-msys2@v2
+        with:
+          update: true
+          msystem: MINGW64
+          install: >-
+            make
+            diffutils
+            gawk
+            yasm
+            pkg-config
+          path-type: inherit
+
+      - name: Cache FFmpeg build
+        id: ffmpeg-cache
+        uses: actions/cache@v4
+        with:
+          path: ffmpeg-7.1.2/ffmpeg-windows-x64
+          key: ffmpeg-windows-x64-7.1.2-v0.6
+
+      - name: Build FFmpeg
+        if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
+        shell: msys2 {0}
+        run: ./scripts/build-ffmpeg.sh
+
+      - name: Cache Android platform tools
+        id: adb-cache
+        uses: actions/cache@v4
+        with:
+          path: android-platform-tools/windows/platform-tools
+          key: android-platform-tools-windows-x64-${{ env.ANDROID_PLATFORM_TOOLS_VERSION }}
+
+      - name: Download Android platform tools
+        if: steps.adb-cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path android-platform-tools/windows | Out-Null
+          Invoke-WebRequest `
+            -Uri "https://dl.google.com/android/repository/platform-tools-latest-windows.zip" `
+            -OutFile "$env:RUNNER_TEMP\platform-tools.zip"
+          Expand-Archive `
+            -Path "$env:RUNNER_TEMP\platform-tools.zip" `
+            -DestinationPath android-platform-tools/windows `
+            -Force
+
+      - name: Add ADB to PATH
+        shell: pwsh
+        run: |
+          "$env:GITHUB_WORKSPACE\android-platform-tools\windows\platform-tools" |
+            Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: le-keymapper-mvp-windows-x64
+
+      - name: Run Rust tests
+        shell: pwsh
+        run: |
+          . ./scripts/ffmpeg-env.ps1
+          cargo test --lib
+
+      - name: Build Windows package
+        shell: pwsh
+        run: ./scripts/package-windows.ps1
+
+      - name: Upload LE KeyMapper MVP
+        uses: actions/upload-artifact@v4
+        with:
+          name: LE-KeyMapper-MVP-Windows-x64
+          path: target/release/scrcpy-mask-windows-x64.zip
+          if-no-files-found: error
+          retention-days: 14

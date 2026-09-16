@@ -107,7 +107,7 @@ impl Default for LocalConfig {
             active_mapping_file: "default.json".to_string(),
             mapping_label_opacity: 0.3,
             language: DEFAULT_LANGUAGE.to_string(),
-            clipboard_sync: true,
+            clipboard_sync: false,
             video_codec: VideoCodec::H264,
             video_bit_rate: 8_000000, // 8M
             video_max_size: 0,        // default no limit

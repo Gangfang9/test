@@ -15,6 +15,12 @@
     "main": "Welcome to Scrcpy Mask 👏🏻"
   },
   "devices": {
+    "mvp": {
+      "title": "USB device connection",
+      "message": "This MVP supports one USB ADB device",
+      "description": "Enable USB debugging on the phone and trust this computer, then refresh and start control. Video is always enabled; audio and wireless ADB are disabled for this release.",
+      "mode": "USB mirroring"
+    },
     "adbTools": {
       "connect": {
         "label": "Wireless connection",

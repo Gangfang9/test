@@ -1,7 +1,6 @@
 import { Flex, Menu, Layout } from "antd";
 import { useState } from "react";
 import logo from "../assets/128x128.png";
-import { SettingFilled } from "@ant-design/icons";
 import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate } from "react-router-dom";
 import { IconFont } from "../hooks";
@@ -29,9 +28,6 @@ export default function Sider() {
         justify="center"
         align="end"
         className="pt-3 pb-3 cursor-pointer"
-        onClick={() =>
-          window.open("https://github.com/AkiChase/scrcpy-mask", "_blank")
-        }
       >
         <i
           className="w-8 h-8 bg-cover flex-shrink-0"
@@ -48,7 +44,7 @@ export default function Sider() {
             textOverflow: "ellipsis",
           }}
         >
-          <span className="color-text font-bold text-4">Scrcpy Mask</span>
+          <span className="color-text font-bold text-4">LE KeyMapper</span>
         </div>
       </Flex>
       <Menu
@@ -66,11 +62,6 @@ export default function Sider() {
             key: "/mappings",
             label: t("sider.mappings"),
             icon: <IconFont type="icon-keyboard" />,
-          },
-          {
-            key: "/settings",
-            label: t("sider.settings"),
-            icon: <SettingFilled />,
           },
         ]}
       />

@@ -114,7 +114,6 @@ impl Server {
                 "/api/device",
                 device::routers(cs_tx.clone(), d_tx, ws_tx.clone()),
             )
-            .nest("/api/script", script::routers(m_tx.clone()))
             .nest("/api/mapping", mapping::routers(m_tx.clone()))
             .nest("/api/config", config::routers(m_tx.clone()))
             .nest("/api/ws", ws::routers(cs_tx, ws_tx));
