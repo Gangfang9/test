@@ -44,7 +44,7 @@ export default function ButtonFps({
   const id = `mapping-fps-${index}`;
   const bindText = config.bind.length > 0 ? config.bind.join("+") : "???";
   const className =
-    "rounded-full absolute box-border border-solid border-2 color-text " +
+    "rounded-full absolute box-border border-solid border-2 color-text cursor-move " +
     (config.bind.length > 0
       ? "border-text-secondary hover:border-text"
       : "border-primary hover:border-primary-hover");

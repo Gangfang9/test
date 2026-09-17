@@ -102,7 +102,7 @@ export default function ButtonDirectionPad({
   const id = `mapping-direction-pad-${index}`;
   const className = useMemo(() => {
     const base =
-      "rounded-full absolute box-border border-solid border-2 color-text ";
+      "rounded-full absolute box-border border-solid border-2 color-text cursor-move ";
     if (config.bind.type === "Button") {
       const { up, down, left, right } = config.bind;
       if (

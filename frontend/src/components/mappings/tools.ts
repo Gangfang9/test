@@ -69,9 +69,12 @@ export function mappingButtonDragFactory(
   onMouseUp: ({ x, y }: { x: number; y: number }) => void,
   delay?: number,
 ) {
-  delay = delay ?? 500;
+  delay = delay ?? 0;
   const handleDrag = (downEvent: React.MouseEvent) => {
     if (downEvent.button !== 0) return;
+
+    downEvent.preventDefault();
+    downEvent.stopPropagation();
 
     const mappingContainer = document.getElementById("mappings-container") as HTMLElement;
     const scrollX = mappingContainer.scrollLeft;
@@ -80,7 +83,7 @@ export function mappingButtonDragFactory(
     const { width, height, left, top } = maskArea;
     const element = downEvent.currentTarget as HTMLElement;
 
-    let dragStarted = false;
+    let dragStarted = delay <= 0;
     let longPressTimer = 0;
     let curMaskX = 0;
     let curMaskY = 0;
@@ -114,10 +117,12 @@ export function mappingButtonDragFactory(
     updateCurMaskPos(downEvent);
     window.addEventListener("mousemove", handleMouseMove);
 
-    longPressTimer = setTimeout(() => {
-      dragStarted = true;
-      element.style.transform = `translate(${curMaskX}px, ${curMaskY}px)`;
-    }, delay);
+    if (delay > 0) {
+      longPressTimer = window.setTimeout(() => {
+        dragStarted = true;
+        element.style.transform = `translate(${curMaskX}px, ${curMaskY}px)`;
+      }, delay);
+    }
     window.addEventListener("mouseup", handleMouseUp);
   };
 
