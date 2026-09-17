@@ -55,7 +55,6 @@ pub fn routers(
         .route("/adb_displays", post(adb_displays))
         .route("/adb_start_app", post(adb_start_app))
         .route("/control/set_display_power", post(set_display_power))
-        .route("/control/set_rotation", post(set_rotation))
         .route("/control/set_pointer_location", post(set_pointer_location))
         .route("/control/send_key", post(send_key))
         .with_state(AppStateDevice { cs_tx, d_tx, ws_tx })
@@ -162,6 +161,12 @@ async fn _control_device(
     // `new_display` setting would create a virtual display whose rotation and
     // touch coordinates do not match the phone screen.
     args.push("display_id=0".to_string());
+    if local_config.capture_orientation >= 0 {
+        args.push(format!(
+            "capture_orientation=@{}",
+            local_config.capture_orientation
+        ));
+    }
     args.push(format!("audio={}", audio));
     args.push(format!("stay_awake={}", local_config.stay_awake));
     args.push(format!(
@@ -876,84 +881,6 @@ async fn set_display_power(
         t!("web.device.setDisplayPowerSuccess"),
         None,
     ))
-}
-
-#[derive(Deserialize)]
-struct PostDataSetRotation {
-    device_id: String,
-    rotation: u8,
-}
-
-async fn set_rotation(
-    Json(payload): Json<PostDataSetRotation>,
-) -> Result<JsonResponse, WebServerError> {
-    if payload.rotation > 3 {
-        return Err(WebServerError::bad_request(
-            "Rotation must be 0, 1, 2, or 3".to_string(),
-        ));
-    }
-
-    let controlled = ControlledDevice::get_device_list()
-        .await
-        .into_iter()
-        .any(|device| device.device_id == payload.device_id);
-    if !controlled {
-        return Err(WebServerError::bad_request(t!(
-            "web.device.noDeviceControlled"
-        )));
-    }
-
-    let rotation = payload.rotation.to_string();
-    let mut output = Vec::<u8>::new();
-    Device::shell(
-        &payload.device_id,
-        ["wm", "fixed-to-user-rotation", "-d", "0", "enabled"],
-        &mut output,
-    )
-    .map_err(WebServerError::internal_error)?;
-    reject_shell_error(&output)?;
-
-    output.clear();
-    Device::shell(
-        &payload.device_id,
-        ["wm", "user-rotation", "-d", "0", "lock", &rotation],
-        &mut output,
-    )
-    .map_err(WebServerError::internal_error)?;
-    reject_shell_error(&output)?;
-
-    output.clear();
-    Device::shell(
-        &payload.device_id,
-        ["wm", "user-rotation", "-d", "0"],
-        &mut output,
-    )
-    .map_err(WebServerError::internal_error)?;
-    reject_shell_error(&output)?;
-    let actual = String::from_utf8_lossy(&output);
-    if !actual
-        .lines()
-        .any(|line| line.trim() == format!("lock {rotation}"))
-    {
-        return Err(WebServerError::internal_error(format!(
-            "Android did not apply rotation {}°: {}",
-            u16::from(payload.rotation) * 90,
-            actual.trim()
-        )));
-    }
-
-    Ok(JsonResponse::success(
-        format!("Rotation set to {}°", u16::from(payload.rotation) * 90),
-        None,
-    ))
-}
-
-fn reject_shell_error(output: &[u8]) -> Result<(), WebServerError> {
-    let output = String::from_utf8_lossy(output);
-    if output.contains("Error:") || output.contains("Exception") {
-        return Err(WebServerError::internal_error(output.trim().to_string()));
-    }
-    Ok(())
 }
 
 #[derive(Deserialize)]

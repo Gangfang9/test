@@ -9,6 +9,7 @@ import {
   setAudioCodec,
   setAudioEnabled,
   setClipboardSync,
+  setCaptureOrientation,
   setMappingLabelOpacity,
   setStayAwake,
   setTitlebarVisible,
@@ -108,6 +109,20 @@ export default function Settings() {
         </SettingRow>
         <SettingRow label="视频编码" description="H.264 兼容性最好；H.265/AV1 取决于手机支持">
           <Select className="w-9rem" value={config.videoCodec} options={["H264", "H265", "AV1"].map((value) => ({ value, label: value }))} onChange={(value) => dispatch(setVideoCodec(value))} />
+        </SettingRow>
+        <SettingRow label="投屏方向" description="只旋转投屏画面，不改变手机系统方向；重连后生效">
+          <Select
+            className="w-9rem"
+            value={config.captureOrientation}
+            options={[
+              { value: -1, label: "跟随手机" },
+              { value: 0, label: "0°" },
+              { value: 90, label: "90°" },
+              { value: 180, label: "180°" },
+              { value: 270, label: "270°" },
+            ]}
+            onChange={(value) => dispatch(setCaptureOrientation(value))}
+          />
         </SettingRow>
         <SettingRow label="音频转发（Android 11+）" description="打开后声音从手机传到电脑">
           <Switch checked={config.audioEnabled} onChange={(value) => dispatch(setAudioEnabled(value))} />

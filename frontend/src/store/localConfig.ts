@@ -68,6 +68,7 @@ export interface LocalConfigState {
   videoBitRate: number;
   videoMaxSize: number;
   videoMaxFps: number;
+  captureOrientation: number;
   displayId: number;
   newDisplayEnabled: boolean;
   newDisplayUseMainSize: boolean;
@@ -106,6 +107,7 @@ const initialState: LocalConfigState = {
   videoBitRate: 8000000,
   videoMaxSize: 0,
   videoMaxFps: 0,
+  captureOrientation: -1,
   displayId: 0,
   newDisplayEnabled: false,
   newDisplayUseMainSize: true,
@@ -211,6 +213,10 @@ const localConfigSlice = createSlice({
       state.videoMaxFps = action.payload;
       updateLocalConfig("video_max_fps", action.payload);
     },
+    setCaptureOrientation: (state, action: PayloadAction<number>) => {
+      state.captureOrientation = action.payload;
+      updateLocalConfig("capture_orientation", action.payload);
+    },
     setDisplayId: (state, action: PayloadAction<number>) => {
       state.displayId = action.payload;
       updateLocalConfig("display_id", action.payload);
@@ -295,6 +301,7 @@ export const {
   setVideoBitRate,
   setVideoMaxSize,
   setVideoMaxFps,
+  setCaptureOrientation,
   setDisplayId,
   setNewDisplayEnabled,
   setNewDisplayUseMainSize,

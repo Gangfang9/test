@@ -73,6 +73,8 @@ pub struct LocalConfig {
     pub video_bit_rate: u32,
     pub video_max_size: u32,
     pub video_max_fps: u32,
+    /// -1 follows the device; otherwise locks capture to 0/90/180/270 degrees.
+    pub capture_orientation: i32,
     pub display_id: i32,
     pub new_display_enabled: bool,
     pub new_display_use_main_size: bool,
@@ -113,6 +115,7 @@ impl Default for LocalConfig {
             video_bit_rate: 8_000000, // 8M
             video_max_size: 0,        // default no limit
             video_max_fps: 0,         // default no limit
+            capture_orientation: -1,
             display_id: 0,
             new_display_enabled: false,
             new_display_use_main_size: true,
@@ -217,6 +220,7 @@ impl LocalConfig {
         (video_bit_rate, u32),
         (video_max_size, u32),
         (video_max_fps, u32),
+        (capture_orientation, i32),
         (display_id, i32),
         (new_display_enabled, bool),
         (new_display_use_main_size, bool),

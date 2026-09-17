@@ -480,6 +480,26 @@ async fn update_config(
                 "web.config.videoMaxFpsTypeError"
             )));
         }
+        "capture_orientation" => {
+            if let Some(value) = payload.value.as_i64() {
+                let value = i32::try_from(value).map_err(|_| {
+                    WebServerError::bad_request("Capture orientation must be -1, 0, 90, 180, or 270")
+                })?;
+                if ![-1, 0, 90, 180, 270].contains(&value) {
+                    return Err(WebServerError::bad_request(
+                        "Capture orientation must be -1, 0, 90, 180, or 270",
+                    ));
+                }
+                LocalConfig::set_capture_orientation(value);
+                return Ok(JsonResponse::success(
+                    format!("Capture orientation set: {}. Reconnect to apply.", value),
+                    None,
+                ));
+            }
+            return Err(WebServerError::bad_request(
+                "Capture orientation must be an integer",
+            ));
+        }
         "display_id" => {
             if let Some(value) = payload.value.as_i64() {
                 let value = i32::try_from(value).map_err(|_| {

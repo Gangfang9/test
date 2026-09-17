@@ -11,7 +11,7 @@ export default function Sider() {
   const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
-  const [siderCollapsed, setSiderCollapsed] = useState(true);
+  const [siderCollapsed, setSiderCollapsed] = useState(false);
 
   const brandClass = siderCollapsed
     ? "opacity-0 max-w-0"

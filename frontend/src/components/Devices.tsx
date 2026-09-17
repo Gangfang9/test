@@ -36,6 +36,7 @@ import {
   EnterOutlined,
   InfoCircleOutlined,
   LinkOutlined,
+  KeyOutlined,
   MobileOutlined,
   ReloadOutlined,
   SwitcherOutlined,
@@ -48,7 +49,7 @@ import { useEffect, useMemo, useState } from "react";
 import { setAdbDevices, setControlledDevices, setIsLoading } from "../store/other";
 import { useMessageContext } from "../hooks";
 import { useAppDispatch, useAppSelector } from "../store/store";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 function ControlledDevices({
   isVideo,
@@ -556,6 +557,7 @@ export default function Devices() {
   const messageApi = useMessageContext();
   const dispatch = useAppDispatch();
   const location = useLocation();
+  const navigate = useNavigate();
 
   const controlledDevices = useAppSelector(
     (state) => state.other.controlledDevices,
@@ -621,13 +623,14 @@ export default function Devices() {
           message={t("devices.mvp.message")}
           description={t("devices.mvp.description")}
         />
-        <Button
-          className="mb-6"
-          icon={<ReloadOutlined />}
-          onClick={restartAdbServer}
-        >
-          {t("devices.adbTools.server.restart")}
-        </Button>
+        <Space className="mb-6" wrap>
+          <Button icon={<ReloadOutlined />} onClick={restartAdbServer}>
+            {t("devices.adbTools.server.restart")}
+          </Button>
+          <Button type="primary" icon={<KeyOutlined />} onClick={() => navigate("/mappings")}>
+            编辑映射按键
+          </Button>
+        </Space>
       </section>
       <section>
         <Flex justify="space-between" align="start">
