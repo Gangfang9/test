@@ -3,6 +3,7 @@ import {
   Badge,
   Button,
   Checkbox,
+  Card,
   Descriptions,
   Dropdown,
   Flex,
@@ -11,6 +12,7 @@ import {
   Select,
   Space,
   Table,
+  Typography,
   type DropdownProps,
   type TableProps,
 } from "antd";
@@ -34,6 +36,7 @@ import {
   EnterOutlined,
   InfoCircleOutlined,
   LinkOutlined,
+  MobileOutlined,
   ReloadOutlined,
   SwitcherOutlined,
   SyncOutlined,
@@ -59,9 +62,6 @@ function ControlledDevices({
   const messageApi = useMessageContext();
   const controlledDevices = useAppSelector(
     (state) => state.other.controlledDevices,
-  );
-  const deviceRotations = useAppSelector(
-    (state) => state.other.deviceRotations,
   );
   const displayId = useAppSelector((state) => state.localConfig.displayId);
   const [actionMenuOpen, setActionMenuOpen] = useState(false);
@@ -311,17 +311,6 @@ function ControlledDevices({
     dispatch(setIsLoading(false));
   }
 
-  async function setRotation(device_id: string, rotation: number) {
-    await runDeviceAction(
-      `${t("devices.controlledDevices.rotation")} ${rotation * 90}°`,
-      () =>
-        requestPost("/api/device/control/set_rotation", {
-          device_id,
-          rotation,
-        }),
-    );
-  }
-
   const columns: TableProps<ControlledDevice>["columns"] = [
     {
       title: "ID",
@@ -350,26 +339,6 @@ function ControlledDevices({
       key: "device_size",
       render: (device_size) => {
         return `${device_size[0]}x${device_size[1]}`;
-      },
-    },
-    {
-      title: t("devices.controlledDevices.rotation"),
-      key: "rotation",
-      align: "center",
-      render: (_, record) => {
-        const rot = deviceRotations[record.scid];
-        return (
-          <Select
-            className="w-6rem"
-            placeholder={t("devices.controlledDevices.selectRotation")}
-            value={rot?.rotation}
-            onChange={(rotation) => setRotation(record.device_id, rotation)}
-            options={[0, 1, 2, 3].map((rotation) => ({
-              value: rotation,
-              label: `${rotation * 90}°`,
-            }))}
-          />
-        );
       },
     },
     {
@@ -544,7 +513,6 @@ function OtherDevices({
 }: {
   otherDevices: AdbDevice[];
 }) {
-  const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const messageApi = useMessageContext();
 
@@ -563,45 +531,23 @@ function OtherDevices({
     dispatch(setIsLoading(false));
   }
 
-  const columns: TableProps<AdbDevice>["columns"] = [
-    {
-      title: "ID",
-      dataIndex: "id",
-      key: "id",
-    },
-    {
-      title: t("devices.otherDevices.status"),
-      dataIndex: "status",
-      key: "status",
-    },
-    {
-      title: (
-        <span>{t("devices.mvp.mode")}</span>
-      ),
-      key: "action",
-      align: "center",
-      width: "18.5%",
-      render: (_, record) => (
-        <Space size="middle" className="text-4">
-          <IconButton
-            color="primary"
-            tooltip={t("devices.otherDevices.actionControl")}
-            size={18}
-            icon={<LinkOutlined />}
-            onClick={() => controlDevice(record)}
-          />
-        </Space>
-      ),
-    },
-  ];
-
   return (
-    <Table<AdbDevice>
-      rowKey={(record) => record.id}
-      pagination={{ pageSize: 5 }}
-      columns={columns}
-      dataSource={otherDevices}
-    />
+    <Flex gap="middle" wrap="wrap">
+      {otherDevices.map((device) => (
+        <Card key={device.id} className="usb-device-card" size="small">
+          <Flex vertical align="center" gap="small">
+            <Badge color="gold" text="USB" />
+            <MobileOutlined className="text-8 color-primary" />
+            <Typography.Text strong>{device.status === "device" ? "已连接" : device.status}</Typography.Text>
+            <Typography.Text type="secondary" copyable>{device.id}</Typography.Text>
+            <Button type="primary" icon={<LinkOutlined />} disabled={device.status !== "device"} onClick={() => controlDevice(device)}>
+              投屏
+            </Button>
+          </Flex>
+        </Card>
+      ))}
+      {otherDevices.length === 0 && <Typography.Text type="secondary">没有等待投屏的 USB 设备</Typography.Text>}
+    </Flex>
   );
 }
 
@@ -626,8 +572,7 @@ export default function Devices() {
     );
   }, [controlledDevices, adbDevices]);
 
-  const videoState = useState(true);
-  const audioState = useState(false);
+  const audioEnabled = useAppSelector((state) => state.localConfig.audioEnabled);
 
   useEffect(() => {
     if (location.pathname === "/devices") refreshDevices();
@@ -698,8 +643,8 @@ export default function Devices() {
           </Button>
         </Flex>
         <ControlledDevices
-          isVideo={videoState[0]}
-          isAudio={audioState[0]}
+          isVideo={true}
+          isAudio={audioEnabled}
         />
       </section>
       <section className="mt-4">

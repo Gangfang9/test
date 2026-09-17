@@ -80,6 +80,7 @@ pub struct LocalConfig {
     pub new_display_height: u32,
     pub new_display_dpi: u32,
     // audio config
+    pub audio_enabled: bool,
     pub audio_codec: AudioCodec,
     pub audio_bit_rate: u32,
     pub audio_source: AudioSource,
@@ -118,6 +119,7 @@ impl Default for LocalConfig {
             new_display_width: 1280,
             new_display_height: 720,
             new_display_dpi: 240,
+            audio_enabled: false,
             audio_codec: AudioCodec::Opus,
             audio_bit_rate: 128_000,
             audio_source: AudioSource::Output,
@@ -221,6 +223,7 @@ impl LocalConfig {
         (new_display_width, u32),
         (new_display_height, u32),
         (new_display_dpi, u32),
+        (audio_enabled, bool),
         (audio_codec, AudioCodec),
         (audio_bit_rate, u32),
         (audio_source, AudioSource),

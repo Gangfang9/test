@@ -4,6 +4,7 @@ import logo from "../assets/128x128.png";
 import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate } from "react-router-dom";
 import { IconFont } from "../hooks";
+import { SettingOutlined } from "@ant-design/icons";
 
 
 export default function Sider() {
@@ -62,6 +63,11 @@ export default function Sider() {
             key: "/mappings",
             label: t("sider.mappings"),
             icon: <IconFont type="icon-keyboard" />,
+          },
+          {
+            key: "/settings",
+            label: t("sider.settings"),
+            icon: <SettingOutlined />,
           },
         ]}
       />

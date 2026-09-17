@@ -106,8 +106,8 @@ async fn _control_device(
 ) -> Result<JsonResponse, WebServerError> {
     let device_id = device_id.to_string();
     let video = true;
-    let audio = false;
     let local_config = LocalConfig::get();
+    let audio = local_config.audio_enabled;
 
     if !is_usb_device_id(&device_id) {
         return Err(WebServerError::bad_request(
@@ -158,20 +158,10 @@ async fn _control_device(
     args.push(SCRCPY_SERVER_VERSION.to_string());
     args.push(format!("scid={}", scid));
     args.push(format!("video={}", video));
-    if video && local_config.new_display_enabled {
-        if local_config.new_display_use_main_size {
-            args.push("new_display=".to_string());
-        } else {
-            args.push(format!(
-                "new_display={}x{}/{}",
-                local_config.new_display_width,
-                local_config.new_display_height,
-                local_config.new_display_dpi
-            ));
-        }
-    } else {
-        args.push(format!("display_id={}", local_config.display_id));
-    }
+    // The MVP always mirrors the physical main display. A persisted upstream
+    // `new_display` setting would create a virtual display whose rotation and
+    // touch coordinates do not match the phone screen.
+    args.push("display_id=0".to_string());
     args.push(format!("audio={}", audio));
     args.push(format!("stay_awake={}", local_config.stay_awake));
     args.push(format!(
@@ -914,28 +904,56 @@ async fn set_rotation(
     }
 
     let rotation = payload.rotation.to_string();
-    Device::shell_logged(
+    let mut output = Vec::<u8>::new();
+    Device::shell(
         &payload.device_id,
-        ["settings", "put", "system", "accelerometer_rotation", "0"],
+        ["wm", "fixed-to-user-rotation", "-d", "0", "enabled"],
+        &mut output,
     )
     .map_err(WebServerError::internal_error)?;
-    Device::shell_logged(
-        &payload.device_id,
-        ["settings", "put", "system", "user_rotation", &rotation],
-    )
-    .map_err(WebServerError::internal_error)?;
+    reject_shell_error(&output)?;
 
-    // Modern Android versions expose a direct window-manager command. The
-    // settings calls above remain the compatibility path for older devices.
-    let _ = Device::shell_logged(
+    output.clear();
+    Device::shell(
         &payload.device_id,
-        ["wm", "set-user-rotation", "lock", &rotation],
-    );
+        ["wm", "user-rotation", "-d", "0", "lock", &rotation],
+        &mut output,
+    )
+    .map_err(WebServerError::internal_error)?;
+    reject_shell_error(&output)?;
+
+    output.clear();
+    Device::shell(
+        &payload.device_id,
+        ["wm", "user-rotation", "-d", "0"],
+        &mut output,
+    )
+    .map_err(WebServerError::internal_error)?;
+    reject_shell_error(&output)?;
+    let actual = String::from_utf8_lossy(&output);
+    if !actual
+        .lines()
+        .any(|line| line.trim() == format!("lock {rotation}"))
+    {
+        return Err(WebServerError::internal_error(format!(
+            "Android did not apply rotation {}°: {}",
+            u16::from(payload.rotation) * 90,
+            actual.trim()
+        )));
+    }
 
     Ok(JsonResponse::success(
         format!("Rotation set to {}°", u16::from(payload.rotation) * 90),
         None,
     ))
+}
+
+fn reject_shell_error(output: &[u8]) -> Result<(), WebServerError> {
+    let output = String::from_utf8_lossy(output);
+    if output.contains("Error:") || output.contains("Exception") {
+        return Err(WebServerError::internal_error(output.trim().to_string()));
+    }
+    Ok(())
 }
 
 #[derive(Deserialize)]

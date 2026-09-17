@@ -575,6 +575,16 @@ async fn update_config(
                 "web.config.newDisplayDpiTypeError"
             )));
         }
+        "audio_enabled" => {
+            if let Some(value) = payload.value.as_bool() {
+                LocalConfig::set_audio_enabled(value);
+                return Ok(JsonResponse::success(
+                    format!("Audio forwarding set: {}. Reconnect to apply.", value),
+                    None,
+                ));
+            }
+            return Err(WebServerError::bad_request("Audio enabled must be bool"));
+        }
         "audio_codec" => {
             if let Some(value) = payload.value.as_str() {
                 let codec = match value {

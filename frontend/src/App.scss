@@ -93,3 +93,28 @@ body,
   padding: 16px 32px;
   @extend .scrollbar;
 }
+
+.product-settings {
+  max-width: 1040px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.product-setting-row {
+  border-color: var(--ant-color-border-secondary);
+
+  .ant-card-body {
+    padding: 18px 20px;
+  }
+}
+
+.usb-device-card {
+  width: 190px;
+  min-height: 210px;
+  border-color: var(--ant-color-border);
+
+  .ant-card-body {
+    padding: 18px;
+  }
+}

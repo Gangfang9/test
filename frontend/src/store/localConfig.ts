@@ -75,6 +75,7 @@ export interface LocalConfigState {
   newDisplayHeight: number;
   newDisplayDpi: number;
   // audio
+  audioEnabled: boolean;
   audioCodec: string;
   audioBitRate: number;
   audioSource: string;
@@ -111,6 +112,7 @@ const initialState: LocalConfigState = {
   newDisplayWidth: 1280,
   newDisplayHeight: 720,
   newDisplayDpi: 240,
+  audioEnabled: false,
   audioCodec: "OPUS",
   audioBitRate: 128000,
   audioSource: "OUTPUT",
@@ -233,6 +235,10 @@ const localConfigSlice = createSlice({
       state.newDisplayDpi = action.payload;
       updateLocalConfig("new_display_dpi", action.payload);
     },
+    setAudioEnabled: (state, action: PayloadAction<boolean>) => {
+      state.audioEnabled = action.payload;
+      updateLocalConfig("audio_enabled", action.payload);
+    },
     setAudioCodec: (state, action: PayloadAction<string>) => {
       state.audioCodec = action.payload;
       updateLocalConfig("audio_codec", action.payload);
@@ -295,6 +301,7 @@ export const {
   setNewDisplayWidth,
   setNewDisplayHeight,
   setNewDisplayDpi,
+  setAudioEnabled,
   setAudioCodec,
   setAudioBitRate,
   setAudioSource,
