@@ -47,6 +47,7 @@
       "actionReconnect": "重新连接设备",
       "actionStartApp": "启动应用",
       "rotation": "方向",
+      "selectRotation": "选择角度",
       "landscape": "横屏",
       "portrait": "竖屏"
     },

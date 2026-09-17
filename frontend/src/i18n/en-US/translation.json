@@ -47,6 +47,7 @@
       "actionReconnect": "Reconnect device",
       "actionStartApp": "Start app",
       "rotation": "Orientation",
+      "selectRotation": "Select angle",
       "landscape": "Landscape",
       "portrait": "Portrait"
     },

@@ -11,7 +11,6 @@ import {
   Select,
   Space,
   Table,
-  Tag,
   type DropdownProps,
   type TableProps,
 } from "antd";
@@ -312,6 +311,17 @@ function ControlledDevices({
     dispatch(setIsLoading(false));
   }
 
+  async function setRotation(device_id: string, rotation: number) {
+    await runDeviceAction(
+      `${t("devices.controlledDevices.rotation")} ${rotation * 90}°`,
+      () =>
+        requestPost("/api/device/control/set_rotation", {
+          device_id,
+          rotation,
+        }),
+    );
+  }
+
   const columns: TableProps<ControlledDevice>["columns"] = [
     {
       title: "ID",
@@ -348,14 +358,17 @@ function ControlledDevices({
       align: "center",
       render: (_, record) => {
         const rot = deviceRotations[record.scid];
-        if (!rot) return null;
-        const isLandscape = rot.width >= rot.height;
         return (
-          <Tag color={isLandscape ? "green" : "blue"}>
-            {isLandscape
-              ? t("devices.controlledDevices.landscape")
-              : t("devices.controlledDevices.portrait")}
-          </Tag>
+          <Select
+            className="w-6rem"
+            placeholder={t("devices.controlledDevices.selectRotation")}
+            value={rot?.rotation}
+            onChange={(rotation) => setRotation(record.device_id, rotation)}
+            options={[0, 1, 2, 3].map((rotation) => ({
+              value: rotation,
+              label: `${rotation * 90}°`,
+            }))}
+          />
         );
       },
     },

@@ -46,6 +46,32 @@ pub struct ScrcpyConnection {
     pub socket: TcpStream,
 }
 
+fn scaled_position(
+    x: i32,
+    y: i32,
+    width: u16,
+    height: u16,
+    device_width: u32,
+    device_height: u32,
+) -> Option<(i32, i32, u16, u16)> {
+    if width == 0
+        || height == 0
+        || device_width == 0
+        || device_height == 0
+        || device_width > u16::MAX as u32
+        || device_height > u16::MAX as u32
+    {
+        return None;
+    }
+
+    Some((
+        (i64::from(x) * i64::from(device_width) / i64::from(width)) as i32,
+        (i64::from(y) * i64::from(device_height) / i64::from(height)) as i32,
+        device_width as u16,
+        device_height as u16,
+    ))
+}
+
 impl ScrcpyConnection {
     pub fn new(socket: TcpStream) -> Self {
         ScrcpyConnection { socket }
@@ -110,12 +136,14 @@ impl ScrcpyConnection {
                                         buttons: _,
                                     } => {
                                         let (device_w, device_h) = watch_rx.borrow_and_update().clone();
-                                        let (old_x, old_y) = (*x, *y);
-                                        let (old_w, old_h) = (*w, *h);
-                                        *x = old_x * device_w as i32 / old_w as i32;
-                                        *y = old_y * device_h as i32 / old_h as i32;
-                                        *w = device_w as u16;
-                                        *h = device_h as u16;
+                                        if let Some((scaled_x, scaled_y, scaled_w, scaled_h)) =
+                                            scaled_position(*x, *y, *w, *h, device_w, device_h)
+                                        {
+                                            *x = scaled_x;
+                                            *y = scaled_y;
+                                            *w = scaled_w;
+                                            *h = scaled_h;
+                                        }
                                     }
                                     ScrcpyControlMsg::InjectScrollEvent {
                                         x,
@@ -127,12 +155,14 @@ impl ScrcpyConnection {
                                         buttons: _,
                                     } => {
                                         let (device_w, device_h) = watch_rx.borrow_and_update().clone();
-                                        let (old_x, old_y) = (*x, *y);
-                                        let (old_w, old_h) = (*w, *h);
-                                        *x = old_x * device_w as i32 / old_w as i32;
-                                        *y = old_y * device_h as i32 / old_h as i32;
-                                        *w = device_w as u16;
-                                        *h = device_h as u16;
+                                        if let Some((scaled_x, scaled_y, scaled_w, scaled_h)) =
+                                            scaled_position(*x, *y, *w, *h, device_w, device_h)
+                                        {
+                                            *x = scaled_x;
+                                            *y = scaled_y;
+                                            *w = scaled_w;
+                                            *h = scaled_h;
+                                        }
                                     }
                                     _ => {}
                                 };
@@ -233,7 +263,13 @@ impl ScrcpyConnection {
         let (read_half, write_half) = self.socket.into_split();
         let finnal_token = token.clone();
         let token_copy = token.clone();
-        let (watch_tx, watch_rx) = watch::channel::<(u32, u32)>((0, 0)); // share device size with writer
+        let initial_device_size = ControlledDevice::get_device_list()
+            .await
+            .into_iter()
+            .find(|device| device.scid == scid)
+            .map(|device| device.device_size)
+            .unwrap_or((0, 0));
+        let (watch_tx, watch_rx) = watch::channel::<(u32, u32)>(initial_device_size);
         if main {
             let (oneshot_tx, oneshot_rx) = oneshot::channel::<Result<String, String>>();
             m_tx.send((
@@ -550,6 +586,24 @@ impl ScrcpyConnection {
         }
         log::info!("[Controller] Audio connection closed");
         self.socket.shutdown().await.unwrap();
+    }
+}
+
+#[cfg(test)]
+mod position_tests {
+    use super::scaled_position;
+
+    #[test]
+    fn scales_mapping_coordinates_to_the_video_size() {
+        assert_eq!(
+            scaled_position(960, 540, 1920, 1080, 2400, 1080),
+            Some((1200, 540, 2400, 1080))
+        );
+    }
+
+    #[test]
+    fn keeps_original_coordinates_when_device_size_is_not_ready() {
+        assert_eq!(scaled_position(960, 540, 1920, 1080, 0, 0), None);
     }
 }
 

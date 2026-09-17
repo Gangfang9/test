@@ -55,6 +55,7 @@ pub fn routers(
         .route("/adb_displays", post(adb_displays))
         .route("/adb_start_app", post(adb_start_app))
         .route("/control/set_display_power", post(set_display_power))
+        .route("/control/set_rotation", post(set_rotation))
         .route("/control/set_pointer_location", post(set_pointer_location))
         .route("/control/send_key", post(send_key))
         .with_state(AppStateDevice { cs_tx, d_tx, ws_tx })
@@ -883,6 +884,56 @@ async fn set_display_power(
     device_action::set_display_power(&state.cs_tx, payload.mode);
     Ok(JsonResponse::success(
         t!("web.device.setDisplayPowerSuccess"),
+        None,
+    ))
+}
+
+#[derive(Deserialize)]
+struct PostDataSetRotation {
+    device_id: String,
+    rotation: u8,
+}
+
+async fn set_rotation(
+    Json(payload): Json<PostDataSetRotation>,
+) -> Result<JsonResponse, WebServerError> {
+    if payload.rotation > 3 {
+        return Err(WebServerError::bad_request(
+            "Rotation must be 0, 1, 2, or 3".to_string(),
+        ));
+    }
+
+    let controlled = ControlledDevice::get_device_list()
+        .await
+        .into_iter()
+        .any(|device| device.device_id == payload.device_id);
+    if !controlled {
+        return Err(WebServerError::bad_request(t!(
+            "web.device.noDeviceControlled"
+        )));
+    }
+
+    let rotation = payload.rotation.to_string();
+    Device::shell_logged(
+        &payload.device_id,
+        ["settings", "put", "system", "accelerometer_rotation", "0"],
+    )
+    .map_err(WebServerError::internal_error)?;
+    Device::shell_logged(
+        &payload.device_id,
+        ["settings", "put", "system", "user_rotation", &rotation],
+    )
+    .map_err(WebServerError::internal_error)?;
+
+    // Modern Android versions expose a direct window-manager command. The
+    // settings calls above remain the compatibility path for older devices.
+    let _ = Device::shell_logged(
+        &payload.device_id,
+        ["wm", "set-user-rotation", "lock", &rotation],
+    );
+
+    Ok(JsonResponse::success(
+        format!("Rotation set to {}°", u16::from(payload.rotation) * 90),
         None,
     ))
 }
