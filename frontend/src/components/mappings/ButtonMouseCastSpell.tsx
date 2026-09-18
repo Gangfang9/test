@@ -41,8 +41,8 @@ import { throttle } from "../../utils";
 import {
   MappingOverlayCircle,
   type MappingOverlayCircleShape,
-  MappingOverlayPathGroup,
-  type MappingOverlayPathGroupShape,
+  MappingOverlayEllipse,
+  type MappingOverlayEllipseShape,
 } from "./MappingOverlay";
 import { useMappingGuideState } from "./MappingOverlayContext";
 
@@ -64,36 +64,6 @@ function projectedCastRadii(
   return {
     rx: Math.round(maskRadius * hF),
     ry: Math.round(maskRadius * vF),
-  };
-}
-
-function projectedCastSectorPaths(
-  radius: number,
-  horizontalFactor: number,
-  verticalFactor: number,
-  originalSize: { height: number },
-  maskArea: { height: number },
-) {
-  const { rx, ry } = projectedCastRadii(
-    radius,
-    horizontalFactor,
-    verticalFactor,
-    originalSize,
-    maskArea,
-  );
-
-  const rad = (deg: number) => (deg * Math.PI) / 180;
-  const sectorPath = (angle1: number, angle2: number) => {
-    const x1 = rx * Math.cos(rad(angle1));
-    const y1 = -ry * Math.sin(rad(angle1));
-    const x2 = rx * Math.cos(rad(angle2));
-    const y2 = -ry * Math.sin(rad(angle2));
-    return `M0,0 L${x1},${y1} A${rx},${ry} 0 0,0 ${x2},${y2} Z`;
-  };
-
-  return {
-    d1: sectorPath(30, 150),
-    d2: sectorPath(60, 120),
   };
 }
 
@@ -144,7 +114,7 @@ export default function ButtonMouseCastSpell({
     };
   }, [config.drag_radius, config.position, scale]);
 
-  const castProjectionShape = useMemo<MappingOverlayPathGroupShape | null>(() => {
+  const castProjectionShape = useMemo<MappingOverlayEllipseShape | null>(() => {
     if (
       config.cast_no_direction ||
       config.cast_radius <= 0 ||
@@ -154,7 +124,7 @@ export default function ButtonMouseCastSpell({
       return null;
     }
 
-    const { d1, d2 } = projectedCastSectorPaths(
+    const { rx, ry } = projectedCastRadii(
       config.cast_radius,
       config.horizontal_scale_factor,
       config.vertical_scale_factor,
@@ -165,10 +135,8 @@ export default function ButtonMouseCastSpell({
     return {
       centerX: config.center.x * scale.x,
       centerY: config.center.y * scale.y,
-      paths: [
-        { d: d2, opacity: 0.18 },
-        { d: d1, opacity: 0.12 },
-      ],
+      radiusX: rx,
+      radiusY: ry,
     };
   }, [
     config.cast_no_direction,
@@ -234,7 +202,7 @@ export default function ButtonMouseCastSpell({
         />
       </SettingModal>
       {castProjectionShape && (
-        <MappingOverlayPathGroup
+        <MappingOverlayEllipse
           shape={castProjectionShape}
           visible={mappingGuide.visible}
           tone="cast"
@@ -302,8 +270,8 @@ function CastCenter({
   );
 
   const maxRadius = Math.min(center.x, center.y);
-  const { d1, d2, transform } = (() => {
-    const { d1, d2 } = projectedCastSectorPaths(
+  const { radiusX, radiusY, transform } = (() => {
+    const { rx, ry } = projectedCastRadii(
       radius,
       horizontalFactor,
       verticalFactor,
@@ -318,7 +286,7 @@ function CastCenter({
 
     const transform = mappingButtonTransformStyle(center.x, center.y, scale);
 
-    return { d1, d2, transform };
+    return { radiusX: rx, radiusY: ry, transform };
   })();
 
   return (
@@ -397,18 +365,16 @@ function CastCenter({
       }
     >
       <g onMouseDown={handleDrag} style={{ transform }}>
-        <path
-          d={d2}
+        <ellipse
+          cx={0}
+          cy={0}
+          rx={radiusX}
+          ry={radiusY}
           fill="var(--ant-color-primary)"
+          stroke="var(--ant-color-primary)"
+          strokeDasharray="6 4"
           style={{
-            opacity: 0.6,
-          }}
-        />
-        <path
-          d={d1}
-          fill="var(--ant-color-primary)"
-          style={{
-            opacity: 0.4,
+            opacity: 0.35,
           }}
         />
       </g>

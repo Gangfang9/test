@@ -486,7 +486,10 @@ pub fn validate_mapping_config_diagnostics(
 
         if !matches!(
             mapping,
-            MappingType::DirectionPad(_) | MappingType::Fps(_) | MappingType::Fire(_)
+            MappingType::DirectionPad(_)
+                | MappingType::Fps(_)
+                | MappingType::Fire(_)
+                | MappingType::MouseCastSpell(_)
         ) {
             diagnostics.push(MappingDiagnostic::mapping(
                 "mapping.mvp.unsupportedType",
@@ -900,6 +903,44 @@ mod mvp_tests {
             diagnostics
                 .iter()
                 .any(|item| item.code == "mapping.mvp.unsupportedType")
+        );
+    }
+
+    #[test]
+    fn accepts_mouse_cast_spell_in_the_mvp() {
+        let config: MappingConfig = serde_json::from_value(json!({
+            "version": "0.1.0",
+            "original_size": { "width": 1920, "height": 1080 },
+            "mappings": [{
+                "type": "MouseCastSpell",
+                "id": "medicine-wheel",
+                "note": "360 degree medicine selection",
+                "pointer_id": 3,
+                "position": { "x": 960, "y": 540 },
+                "button_size": 52,
+                "center": { "x": 960, "y": 540 },
+                "horizontal_scale_factor": 7,
+                "vertical_scale_factor": 10,
+                "drag_radius": 150,
+                "cast_radius": 200,
+                "release_mode": "OnRelease",
+                "cast_no_direction": false,
+                "initial_duration": 0,
+                "enable_initial_swipe_randomization": false,
+                "bind": ["Tab"],
+                "random_offset_x": 0,
+                "random_offset_y": 0,
+                "random_offset_algorithm": "ExtremeRandom",
+                "script_hooks": { "before_script": "", "after_script": "" }
+            }]
+        }))
+        .unwrap();
+
+        let diagnostics = validate_mapping_config_diagnostics(&config);
+        assert!(
+            diagnostics
+                .iter()
+                .all(|item| item.code != "mapping.mvp.unsupportedType")
         );
     }
 
