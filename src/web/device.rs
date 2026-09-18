@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tokio::{
     sync::{broadcast, mpsc::UnboundedSender},
-    time::sleep,
+    time::{sleep, timeout},
 };
 
 use crate::{
@@ -31,6 +31,18 @@ use crate::{
 };
 
 const SCRCPY_SERVER_VERSION: &str = "4.0";
+const ADB_OPERATION_TIMEOUT: Duration = Duration::from_secs(15);
+
+async fn run_adb_operation<F>(operation: F) -> Result<(), WebServerError>
+where
+    F: FnOnce() -> Result<(), String> + Send + 'static,
+{
+    let result = timeout(ADB_OPERATION_TIMEOUT, tokio::task::spawn_blocking(operation))
+        .await
+        .map_err(|_| WebServerError::internal_error("ADB 操作超时，请检查 USB 调试和设备连接".to_string()))?
+        .map_err(|e| WebServerError::internal_error(format!("ADB 操作线程失败: {e}")))?;
+    result.map_err(WebServerError::internal_error)
+}
 
 #[derive(Debug, Clone)]
 pub struct AppStateDevice {
@@ -128,17 +140,23 @@ async fn _control_device(
         "assets",
         &format!("scrcpy-mask-server-v{}", SCRCPY_SERVER_VERSION),
     ]);
-    Device::push(
-        &device_id,
-        scrcpy_path.to_str().unwrap(),
-        "/data/local/tmp/scrcpy-server.jar",
-    )
-    .map_err(WebServerError::internal_error)?;
+    let push_device = device_id.clone();
+    let push_path = scrcpy_path.to_str().unwrap().to_string();
+    run_adb_operation(move || {
+        Device::push(&push_device, &push_path, "/data/local/tmp/scrcpy-server.jar")
+    })
+    .await?;
     log::info!("[WebServe] {}", t!("web.device.pushScrcpyServerSuccess"));
 
     let remote = format!("localabstract:scrcpy_{}", scid);
     let local = format!("tcp:{}", local_config.controller_port);
-    Device::reverse(&device_id, &remote, &local).map_err(WebServerError::internal_error)?;
+    let reverse_device = device_id.clone();
+    let reverse_remote = remote.clone();
+    let reverse_local = local.clone();
+    run_adb_operation(move || {
+        Device::reverse(&reverse_device, &reverse_remote, &reverse_local)
+    })
+    .await?;
     log::info!(
         "[WebServe] {}",
         t!("web.device.reverseSuccess", remote => remote, local => local)

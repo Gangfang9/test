@@ -528,8 +528,9 @@ function OtherDevices({
       messageApi?.success(res.message);
     } catch (error) {
       messageApi?.error(error as string);
+    } finally {
+      dispatch(setIsLoading(false));
     }
-    dispatch(setIsLoading(false));
   }
 
   return (

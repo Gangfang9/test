@@ -1,5 +1,7 @@
 import axios, { type AxiosResponse, type ResponseType } from "axios";
 
+const API_TIMEOUT_MS = 20_000;
+
 export type ApiError<D = any> = {
   code?: number;
   message: string;
@@ -53,6 +55,7 @@ export async function requestGet<D = any>(
     if (responseType) {
       opt.responseType = responseType;
     }
+    opt.timeout = API_TIMEOUT_MS;
     return axios.get(url, opt);
   });
 }
@@ -68,6 +71,7 @@ export async function requestPost<D = any>(
     if (responseType) {
       opt.responseType = responseType;
     }
+    opt.timeout = API_TIMEOUT_MS;
     return axios.post(url, data, opt);
   });
 }
