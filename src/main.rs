@@ -90,7 +90,7 @@ fn main() {
 
     let mut local_config = LocalConfig::get();
     // update language
-    let language = local_config.language;
+    let language = local_config.language.clone();
     if is_available_language(&language) {
         rust_i18n::set_locale(&language);
     } else {
