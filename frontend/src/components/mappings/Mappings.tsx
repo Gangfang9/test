@@ -472,6 +472,7 @@ const buttonTypes = [
   "DirectionPad",
   "Fps",
   "Fire",
+  "MouseCastSpell",
 ];
 
 const mappingButtonMap = {

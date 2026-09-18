@@ -22,8 +22,8 @@ use crate::{
             ControlMsgHelper, DEFAULT_SWIPE_DURATION, Position, SingleSwipeStrategy,
             default_jitter_offset, default_random_distance_max_scale,
             default_random_distance_min_scale, default_random_offset, handle_direction_jitter_path,
-            handle_direction_move_randomized, next_jitter_deadline, random_offset_vec2,
-            spawn_initial_swipe,
+            handle_direction_move_randomized, next_jitter_deadline,
+            random_offset_vec2_with_algorithm, spawn_initial_swipe, RandomOffsetAlgorithm,
         },
     },
     mask::mask_command::MaskSize,
@@ -84,6 +84,7 @@ pub struct BindMappingDirectionPad {
     pub enable_randomization: bool,
     pub random_offset_x: f32,
     pub random_offset_y: f32,
+    pub random_offset_algorithm: RandomOffsetAlgorithm,
     pub random_distance_min_scale: f32,
     pub random_distance_max_scale: f32,
     pub jitter_offset_x: f32,
@@ -108,6 +109,7 @@ impl From<MappingDirectionPad> for BindMappingDirectionPad {
             enable_randomization: value.enable_randomization,
             random_offset_x: value.random_offset_x,
             random_offset_y: value.random_offset_y,
+            random_offset_algorithm: value.random_offset_algorithm,
             random_distance_min_scale: value.random_distance_min_scale,
             random_distance_max_scale: value.random_distance_max_scale,
             jitter_offset_x: value.jitter_offset_x,
@@ -128,6 +130,8 @@ pub struct MappingDirectionPad {
     pub note: String,
     pub pointer_id: u64,
     pub position: Position,
+    #[serde(default = "default_direction_button_size")]
+    pub button_size: f32,
     pub initial_duration: u64,
     #[serde(serialize_with = "crate::mask::mapping::serde_float::serialize_f32_3dp")]
     pub max_offset_x: f32,
@@ -145,6 +149,8 @@ pub struct MappingDirectionPad {
         serialize_with = "crate::mask::mapping::serde_float::serialize_f32_3dp"
     )]
     pub random_offset_y: f32,
+    #[serde(default)]
+    pub random_offset_algorithm: RandomOffsetAlgorithm,
     #[serde(
         default = "default_random_distance_min_scale",
         serialize_with = "crate::mask::mapping::serde_float::serialize_f32_3dp"
@@ -175,6 +181,10 @@ pub struct MappingDirectionPad {
     pub bind: DirectionBinding,
     #[serde(default)]
     pub script_hooks: MappingScriptHooks,
+}
+
+fn default_direction_button_size() -> f32 {
+    128.0
 }
 
 fn default_up_boost_scale() -> f32 {
@@ -311,7 +321,11 @@ fn apply_direction_pad_down(
     let random_offset = Vec2::new(mapping.random_offset_x, mapping.random_offset_y);
     let jitter_offset = Vec2::new(mapping.jitter_offset_x, mapping.jitter_offset_y);
     let random_anchor = if mapping.enable_randomization {
-        random_offset_vec2(original_pos, random_offset)
+        random_offset_vec2_with_algorithm(
+            original_pos,
+            random_offset,
+            mapping.random_offset_algorithm,
+        )
     } else {
         original_pos
     };
@@ -374,7 +388,11 @@ fn apply_direction_pad_tap_without_swipe(
     let original_pos: Vec2 = mapping.position.into();
     let random_offset = Vec2::new(mapping.random_offset_x, mapping.random_offset_y);
     let random_anchor = if mapping.enable_randomization {
-        random_offset_vec2(original_pos, random_offset)
+        random_offset_vec2_with_algorithm(
+            original_pos,
+            random_offset,
+            mapping.random_offset_algorithm,
+        )
     } else {
         original_pos
     };

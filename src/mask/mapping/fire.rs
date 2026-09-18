@@ -29,7 +29,10 @@ use crate::{
             },
             script::{BindMappingScriptHooks, MappingScriptHooks},
             script_helper::{ScriptRuntimeCommandSender, ScriptSharedState},
-            utils::{ControlMsgHelper, Position, default_random_offset, random_offset_vec2},
+            utils::{
+                ControlMsgHelper, Position, RandomOffsetAlgorithm, default_button_size,
+                default_random_offset, random_offset_vec2_with_algorithm,
+            },
         },
         mask_command::MaskSize,
     },
@@ -58,6 +61,9 @@ pub struct BindMappingFps {
     pub note: String,
     pub pointer_id: u64,
     pub position: Position,
+    pub random_offset_x: f32,
+    pub random_offset_y: f32,
+    pub random_offset_algorithm: RandomOffsetAlgorithm,
     pub sensitivity_x: f32,
     pub sensitivity_y: f32,
     pub max_offset_x: f32,
@@ -74,6 +80,9 @@ impl From<MappingFps> for BindMappingFps {
             note: value.note,
             pointer_id: value.pointer_id,
             position: value.position,
+            random_offset_x: value.random_offset_x,
+            random_offset_y: value.random_offset_y,
+            random_offset_algorithm: value.random_offset_algorithm,
             sensitivity_x: value.sensitivity_x,
             sensitivity_y: value.sensitivity_y,
             max_offset_x: value.max_offset_x,
@@ -92,6 +101,20 @@ pub struct MappingFps {
     pub note: String,
     pub pointer_id: u64,
     pub position: Position,
+    #[serde(default = "default_button_size")]
+    pub button_size: f32,
+    #[serde(
+        default = "default_random_offset",
+        serialize_with = "crate::mask::mapping::serde_float::serialize_f32_3dp"
+    )]
+    pub random_offset_x: f32,
+    #[serde(
+        default = "default_random_offset",
+        serialize_with = "crate::mask::mapping::serde_float::serialize_f32_3dp"
+    )]
+    pub random_offset_y: f32,
+    #[serde(default)]
+    pub random_offset_algorithm: RandomOffsetAlgorithm,
     #[serde(serialize_with = "crate::mask::mapping::serde_float::serialize_f32_3dp")]
     pub sensitivity_x: f32,
     #[serde(serialize_with = "crate::mask::mapping::serde_float::serialize_f32_3dp")]
@@ -118,7 +141,11 @@ pub fn enter_fps_mode(
     mapping: &BindMappingFps,
     original_size: Vec2,
 ) {
-    let original_pos = mapping.position.into();
+    let original_pos = random_offset_vec2_with_algorithm(
+        mapping.position.into(),
+        Vec2::new(mapping.random_offset_x, mapping.random_offset_y),
+        mapping.random_offset_algorithm,
+    );
     fps_config.pointer_id = mapping.pointer_id;
     fps_config.reset_touch_state();
     fps_config.original_pos = original_pos;
@@ -255,6 +282,7 @@ pub struct BindMappingFire {
     pub input_binding: InputBinding,
     pub random_offset_x: f32,
     pub random_offset_y: f32,
+    pub random_offset_algorithm: RandomOffsetAlgorithm,
     pub script_hooks: BindMappingScriptHooks,
 }
 
@@ -272,6 +300,7 @@ impl From<MappingFire> for BindMappingFire {
             input_binding: ContinuousBinding::hold(value.bind).0,
             random_offset_x: value.random_offset_x,
             random_offset_y: value.random_offset_y,
+            random_offset_algorithm: value.random_offset_algorithm,
             script_hooks: value.script_hooks.into(),
         }
     }
@@ -284,6 +313,8 @@ pub struct MappingFire {
     pub note: String,
     pub pointer_id: u64,
     pub position: Position,
+    #[serde(default = "default_button_size")]
+    pub button_size: f32,
     #[serde(default = "default_preserve_fps_control")]
     pub preserve_fps_control: bool,
     #[serde(serialize_with = "crate::mask::mapping::serde_float::serialize_f32_3dp")]
@@ -301,6 +332,8 @@ pub struct MappingFire {
         serialize_with = "crate::mask::mapping::serde_float::serialize_f32_3dp"
     )]
     pub random_offset_y: f32,
+    #[serde(default)]
+    pub random_offset_algorithm: RandomOffsetAlgorithm,
     #[serde(default)]
     pub script_hooks: MappingScriptHooks,
 }
@@ -487,9 +520,10 @@ fn apply_fire_begin(
     }
 
     let original_pos: Vec2 = mapping.position.into();
-    let random_pos = random_offset_vec2(
+    let random_pos = random_offset_vec2_with_algorithm(
         original_pos,
         Vec2::new(mapping.random_offset_x, mapping.random_offset_y),
+        mapping.random_offset_algorithm,
     );
     let sensitivity: Vec2 = (mapping.sensitivity_x, mapping.sensitivity_y).into();
     let current_pos = random_pos / original_size * mask_size;

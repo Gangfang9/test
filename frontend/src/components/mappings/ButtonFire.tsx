@@ -10,11 +10,13 @@ import { useAppSelector } from "../../store/store";
 import { ItemBox, ItemBoxContainer } from "../common/ItemBox";
 import {
   SettingBind,
+  SettingButtonSize,
   SettingFooter,
   SettingMappingId,
   SettingModal,
   SettingNote,
   SettingPointerId,
+  SettingRandomOffsetAlgorithm,
 } from "./Common";
 import { useTranslation } from "react-i18next";
 import { IconFont } from "../../hooks";
@@ -53,8 +55,8 @@ export default function ButtonFire({
   }, [originalSize, maskArea]);
 
   const buttonStyle = useMemo(
-    () => mappingButtonScaledPresetStyle(52, maskArea),
-    [maskArea],
+    () => mappingButtonScaledPresetStyle(config.button_size, maskArea),
+    [config.button_size, maskArea],
   );
 
   useEffect(() => {
@@ -142,6 +144,10 @@ function Setting({
       <h1 className="title-with-line">{t("mappings.fire.setting.title")}</h1>
       <ItemBoxContainer className="max-h-70vh overflow-y-auto pr-2 scrollbar">
         <SettingMappingId id={config.id} />
+        <SettingButtonSize
+          value={config.button_size}
+          onChange={(button_size) => onConfigChange({ ...config, button_size })}
+        />
         <SettingBind
           bind={config.bind}
           onBindChange={(bind) => onConfigChange((pre) => ({ ...pre, bind }))}
@@ -180,6 +186,12 @@ function Setting({
             }
           />
         </ItemBox>
+        <SettingRandomOffsetAlgorithm
+          value={config.random_offset_algorithm}
+          onChange={(random_offset_algorithm) =>
+            onConfigChange({ ...config, random_offset_algorithm })
+          }
+        />
         {!config.preserve_fps_control && (
           <ItemBox label={t("mappings.fire.setting.sensitivity")} tooltip={t("mappings.fire.setting.sensitivityHint")}>
             <Space.Compact className="w-full">

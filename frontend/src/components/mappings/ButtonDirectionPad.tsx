@@ -17,18 +17,20 @@ import {
 } from "antd";
 import {
   mappingButtonDragFactory,
-  mappingButtonPresetStyle,
+  mappingButtonScaledPresetStyle,
   mappingButtonTransformStyle,
 } from "./tools";
 import { useAppSelector } from "../../store/store";
 import { ItemBox, ItemBoxContainer } from "../common/ItemBox";
 import {
   SettingBind,
+  SettingButtonSize,
   SettingFooter,
   SettingMappingId,
   SettingModal,
   SettingNote,
   SettingPointerId,
+  SettingRandomOffsetAlgorithm,
 } from "./Common";
 import { useTranslation } from "react-i18next";
 import { AXIS_NAMES } from "./keyCode";
@@ -131,12 +133,8 @@ export default function ButtonDirectionPad({
   }, [originalSize, maskArea]);
 
   const buttonStyle = useMemo(
-    () =>
-      mappingButtonPresetStyle(
-        Math.round(config.max_offset_x * scale.x),
-        Math.round(config.max_offset_y * scale.y)
-      ),
-    [config.max_offset_x, config.max_offset_y, scale]
+    () => mappingButtonScaledPresetStyle(config.button_size, maskArea),
+    [config.button_size, maskArea]
   );
 
   useEffect(() => {
@@ -279,6 +277,10 @@ function Setting({
       </h1>
       <ItemBoxContainer className="max-h-70vh overflow-y-auto pr-2 scrollbar">
         <SettingMappingId id={config.id} />
+        <SettingButtonSize
+          value={config.button_size}
+          onChange={(button_size) => onConfigChange({ ...config, button_size })}
+        />
         <ItemBox
           label={t("mappings.common.bind.settingLabel")}
           extra={
@@ -410,6 +412,12 @@ function Setting({
                 />
               </Space.Compact>
             </ItemBox>
+            <SettingRandomOffsetAlgorithm
+              value={config.random_offset_algorithm}
+              onChange={(random_offset_algorithm) =>
+                onConfigChange({ ...config, random_offset_algorithm })
+              }
+            />
             <ItemBox
               label={t("mappings.directionPad.setting.randomDistanceScale")}
               tooltip={t("mappings.directionPad.setting.randomDistanceScaleHint")}

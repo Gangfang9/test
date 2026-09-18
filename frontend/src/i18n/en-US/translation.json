@@ -123,6 +123,17 @@
       "randomOffsetY": "Random offset Y",
       "randomOffsetXHint": "Random horizontal offset applied each activation, picked from [-offset, +offset]. Set to 0 to disable.",
       "randomOffsetYHint": "Random vertical offset applied each activation, picked from [-offset, +offset]. Set to 0 to disable.",
+      "buttonSize": "Button size",
+      "buttonSizeHint": "Changes the mapping button's visible and draggable area in the editor and saves it with the profile.",
+      "randomAlgorithm": "Random offset algorithm",
+      "randomAlgorithmHint": "Controls how the real touch offset is generated on every activation.",
+      "randomAlgorithms": {
+        "extreme": "Extreme random",
+        "bezier": "Bezier curve (default)",
+        "linear": "Linear interpolation",
+        "sine": "Sine wave",
+        "randomWalk": "Random walk"
+      },
       "scriptHooks": {
         "before": "Before script",
         "beforeHint": "Runs before this mapping action. Leave empty to skip. Scripts block the current mapping flow, so slow scripts can cause input latency or stuck mappings.",
@@ -229,7 +240,7 @@
     },
     "mouseCastSpell": {
       "setting": {
-        "title": "Mapping Configuration - MouseCastSpell",
+        "title": "Mapping Configuration - Omnidirectional Drag",
         "center": "Cast center",
         "centerHint": "Reference point for cast direction calculation, typically the character's position on screen. Adjust if the character is not centered due to perspective projection.",
         "scaleFactor": "Scale factors",
@@ -255,7 +266,7 @@
         "setCenter": "Center",
         "back": "Back"
       },
-      "name": "MouseCastSpell"
+      "name": "Omnidirectional Drag"
     },
     "padCastSpell": {
       "setting": {

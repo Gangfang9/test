@@ -38,8 +38,9 @@ use crate::{
             utils::{
                 ControlMsgHelper, DEFAULT_SWIPE_DURATION, Position, SingleSwipeStrategy,
                 anchor_random_offset, build_single_segment_swipe_intermediate_points,
-                default_random_offset, handle_direction_jitter, handle_direction_move_randomized,
-                random_offset_vec2, spawn_initial_swipe,
+                default_button_size, default_random_offset, handle_direction_jitter,
+                handle_direction_move_randomized, random_offset_vec2,
+                random_offset_vec2_with_algorithm, spawn_initial_swipe, RandomOffsetAlgorithm,
             },
         },
         mask_command::MaskSize,
@@ -244,6 +245,7 @@ pub struct BindMappingMouseCastSpell {
     pub input_binding: InputBinding,
     pub random_offset_x: f32,
     pub random_offset_y: f32,
+    pub random_offset_algorithm: RandomOffsetAlgorithm,
     pub script_hooks: BindMappingScriptHooks,
 }
 
@@ -267,6 +269,7 @@ impl From<MappingMouseCastSpell> for BindMappingMouseCastSpell {
             input_binding: ContinuousBinding::hold(value.bind).0,
             random_offset_x: value.random_offset_x,
             random_offset_y: value.random_offset_y,
+            random_offset_algorithm: value.random_offset_algorithm,
             script_hooks: value.script_hooks.into(),
         }
     }
@@ -279,6 +282,8 @@ pub struct MappingMouseCastSpell {
     pub note: String,
     pub pointer_id: u64,
     pub position: Position,
+    #[serde(default = "default_button_size")]
+    pub button_size: f32,
     pub center: Position,
     #[serde(serialize_with = "crate::mask::mapping::serde_float::serialize_f32_3dp")]
     pub horizontal_scale_factor: f32,
@@ -305,6 +310,8 @@ pub struct MappingMouseCastSpell {
         serialize_with = "crate::mask::mapping::serde_float::serialize_f32_3dp"
     )]
     pub random_offset_y: f32,
+    #[serde(default)]
+    pub random_offset_algorithm: RandomOffsetAlgorithm,
     #[serde(default)]
     pub script_hooks: MappingScriptHooks,
 }
@@ -522,9 +529,10 @@ fn start_mouse_cast_after_before(
 
     let pointer_id = mapping.pointer_id;
     let original_pos: Vec2 = mapping.position.into();
-    let original_pos = random_offset_vec2(
+    let original_pos = random_offset_vec2_with_algorithm(
         original_pos,
         Vec2::new(mapping.random_offset_x, mapping.random_offset_y),
+        mapping.random_offset_algorithm,
     );
     let center_pos: Vec2 = mapping.center.into();
     let release_mode = mapping.release_mode.clone();

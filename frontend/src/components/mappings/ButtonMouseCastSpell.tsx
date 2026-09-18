@@ -25,11 +25,13 @@ import {
   DeviceBackground,
   RefreshImageButton,
   SettingBind,
+  SettingButtonSize,
   SettingFooter,
   SettingMappingId,
   SettingModal,
   SettingNote,
   SettingPointerId,
+  SettingRandomOffsetAlgorithm,
   SettingScriptHooks,
 } from "./Common";
 import { useTranslation } from "react-i18next";
@@ -130,8 +132,8 @@ export default function ButtonMouseCastSpell({
   }, [originalSize, maskArea]);
 
   const buttonStyle = useMemo(
-    () => mappingButtonScaledPresetStyle(64, maskArea),
-    [maskArea],
+    () => mappingButtonScaledPresetStyle(config.button_size, maskArea),
+    [config.button_size, maskArea],
   );
 
   const dragRadiusShape = useMemo<MappingOverlayCircleShape>(() => {
@@ -607,6 +609,10 @@ function Setting({
       )}
       <ItemBoxContainer className="max-h-70vh overflow-y-auto pr-2 scrollbar">
         <SettingMappingId id={config.id} />
+        <SettingButtonSize
+          value={config.button_size}
+          onChange={(button_size) => onConfigChange({ ...config, button_size })}
+        />
         <SettingBind
           bind={config.bind}
           onBindChange={(bind) => onConfigChange((pre) => ({ ...pre, bind }))}
@@ -655,6 +661,12 @@ function Setting({
             }
           />
         </ItemBox>
+        <SettingRandomOffsetAlgorithm
+          value={config.random_offset_algorithm}
+          onChange={(random_offset_algorithm) =>
+            onConfigChange({ ...config, random_offset_algorithm })
+          }
+        />
         <ItemBox label={t("mappings.mouseCastSpell.setting.releaseMode.label")} tooltip={t("mappings.mouseCastSpell.setting.releaseMode.hint")}>
           <Select
             className="w-full"

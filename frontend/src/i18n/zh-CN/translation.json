@@ -123,6 +123,17 @@
       "randomOffsetY": "随机偏移 Y",
       "randomOffsetXHint": "每次激活时对触摸坐标施加的水平随机偏移，在 [-偏移, +偏移] 内随机取值。设为 0 禁用。",
       "randomOffsetYHint": "每次激活时对触摸坐标施加的垂直随机偏移，在 [-偏移, +偏移] 内随机取值。设为 0 禁用。",
+      "buttonSize": "按键大小",
+      "buttonSizeHint": "拖动滑块改变编辑页面中该按键的显示及可拖动范围，设置会随映射方案保存。",
+      "randomAlgorithm": "随机偏移算法",
+      "randomAlgorithmHint": "选择实际触摸坐标的随机偏移分布方式，每次激活都会重新计算。",
+      "randomAlgorithms": {
+        "extreme": "极限随机",
+        "bezier": "贝塞尔曲线（默认）",
+        "linear": "线性插值",
+        "sine": "正弦波",
+        "randomWalk": "随机游走"
+      },
       "scriptHooks": {
         "before": "前置脚本",
         "beforeHint": "在该映射动作执行前运行。留空则跳过。脚本会阻塞当前映射流程，耗时脚本可能导致输入延迟或映射卡住。",
@@ -229,7 +240,7 @@
     },
     "mouseCastSpell": {
       "setting": {
-        "title": "映射配置 - 鼠标施法",
+        "title": "映射配置 - 万向拖动",
         "center": "施法中心",
         "centerHint": "施法指向的参考中心点，一般为角色在屏幕中的位置。如果角色因透视投影而不在屏幕中心，可调整此参数校准。",
         "scaleFactor": "缩放因子",
@@ -255,7 +266,7 @@
         "setCenter": "中心",
         "back": "返回"
       },
-      "name": "鼠标施法"
+      "name": "万向拖动"
     },
     "padCastSpell": {
       "setting": {

@@ -16,6 +16,7 @@ import {
   InputNumber,
   Button,
   Select,
+  Slider,
   type SelectProps,
   Typography,
 } from "antd";
@@ -29,7 +30,11 @@ import {
 } from "react";
 import IconButton from "../common/IconButton";
 
-import type { ButtonBinding, MappingScriptHooks } from "./mapping";
+import type {
+  ButtonBinding,
+  MappingScriptHooks,
+  RandomOffsetAlgorithm,
+} from "./mapping";
 import { EVENT_CODE_TO_KEY_CODE, KEY_NAMES } from "./keyCode";
 import { debounce } from "../../utils";
 import { useTranslation } from "react-i18next";
@@ -63,6 +68,49 @@ export function SettingModal({ children, open, onClose }: SettingModalProps) {
       />
       {children}
     </Modal>
+  );
+}
+
+export function SettingButtonSize({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (value: number) => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <ItemBox
+      label={t("mappings.common.buttonSize")}
+      tooltip={t("mappings.common.buttonSizeHint")}
+    >
+      <Slider min={32} max={240} step={4} value={value} onChange={onChange} />
+    </ItemBox>
+  );
+}
+
+export function SettingRandomOffsetAlgorithm({
+  value,
+  onChange,
+}: {
+  value: RandomOffsetAlgorithm;
+  onChange: (value: RandomOffsetAlgorithm) => void;
+}) {
+  const { t } = useTranslation();
+  const options: { value: RandomOffsetAlgorithm; label: string }[] = [
+    { value: "ExtremeRandom", label: t("mappings.common.randomAlgorithms.extreme") },
+    { value: "Bezier", label: t("mappings.common.randomAlgorithms.bezier") },
+    { value: "Linear", label: t("mappings.common.randomAlgorithms.linear") },
+    { value: "Sine", label: t("mappings.common.randomAlgorithms.sine") },
+    { value: "RandomWalk", label: t("mappings.common.randomAlgorithms.randomWalk") },
+  ];
+  return (
+    <ItemBox
+      label={t("mappings.common.randomAlgorithm")}
+      tooltip={t("mappings.common.randomAlgorithmHint")}
+    >
+      <Select className="w-full" value={value} onChange={onChange} options={options} />
+    </ItemBox>
   );
 }
 

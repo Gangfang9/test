@@ -285,6 +285,20 @@ pub fn default_random_offset() -> f32 {
     10.0
 }
 
+pub fn default_button_size() -> f32 {
+    64.0
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, Default)]
+pub enum RandomOffsetAlgorithm {
+    ExtremeRandom,
+    #[default]
+    Bezier,
+    Linear,
+    Sine,
+    RandomWalk,
+}
+
 pub fn default_random_distance_min_scale() -> f32 {
     0.9
 }
@@ -299,12 +313,47 @@ pub fn default_jitter_offset() -> f32 {
 
 // Apply a random offset within a fixed human-touch error range.
 pub fn random_offset_vec2(pos: Vec2, offset: Vec2) -> Vec2 {
+    random_offset_vec2_with_algorithm(pos, offset, RandomOffsetAlgorithm::Linear)
+}
+
+pub fn random_offset_vec2_with_algorithm(
+    pos: Vec2,
+    offset: Vec2,
+    algorithm: RandomOffsetAlgorithm,
+) -> Vec2 {
     if offset == Vec2::ZERO {
         return pos;
     }
-    let x_offset = (rand::random::<f32>() * 2.0 - 1.0) * offset.x;
-    let y_offset = (rand::random::<f32>() * 2.0 - 1.0) * offset.y;
-    pos + Vec2::new(x_offset, y_offset)
+    let signed = || rand::random::<f32>() * 2.0 - 1.0;
+    let sample = match algorithm {
+        RandomOffsetAlgorithm::ExtremeRandom => {
+            let edge = |v: f32| v.signum() * (0.7 + v.abs() * 0.3);
+            Vec2::new(edge(signed()), edge(signed()))
+        }
+        RandomOffsetAlgorithm::Bezier => {
+            let t = rand::random::<f32>();
+            let cubic = |a: f32, b: f32| {
+                let one_minus_t = 1.0 - t;
+                3.0 * one_minus_t * one_minus_t * t * a
+                    + 3.0 * one_minus_t * t * t * b
+                    + t * t * t * signed()
+            };
+            Vec2::new(cubic(signed(), signed()), cubic(signed(), signed()))
+        }
+        RandomOffsetAlgorithm::Linear => Vec2::new(signed(), signed()),
+        RandomOffsetAlgorithm::Sine => {
+            let phase = rand::random::<f32>() * std::f32::consts::TAU;
+            Vec2::new(phase.sin(), phase.cos())
+        }
+        RandomOffsetAlgorithm::RandomWalk => {
+            let mut walk = Vec2::ZERO;
+            for _ in 0..6 {
+                walk += Vec2::new(signed(), signed()) / 3.0;
+            }
+            walk.clamp(Vec2::splat(-1.0), Vec2::splat(1.0))
+        }
+    };
+    pos + sample * offset
 }
 
 pub fn build_multisegment_swipe_intermediate_points(

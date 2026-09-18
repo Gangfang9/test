@@ -36,6 +36,16 @@ export type Position = {
 
 export type ButtonBinding = string[];
 
+export type RandomOffsetAlgorithm =
+  | "ExtremeRandom"
+  | "Bezier"
+  | "Linear"
+  | "Sine"
+  | "RandomWalk";
+
+export const defaultButtonSize = 64;
+export const defaultRandomOffsetAlgorithm: RandomOffsetAlgorithm = "Bezier";
+
 export interface MappingScriptHooks {
   before_script: string;
   after_script: string;
@@ -203,6 +213,7 @@ export type DirectionBinding =
 export interface DirectionPadConfig {
   id: string;
   bind: DirectionBinding;
+  button_size: number;
   enable_randomization: boolean;
   initial_duration: number;
   max_offset_x: number;
@@ -214,6 +225,7 @@ export interface DirectionPadConfig {
   random_distance_min_scale: number;
   random_offset_x: number;
   random_offset_y: number;
+  random_offset_algorithm: RandomOffsetAlgorithm;
   jitter_offset_x: number;
   jitter_offset_y: number;
   script_hooks: MappingScriptHooks;
@@ -232,6 +244,7 @@ export function newDirectionPad(position: Position): DirectionPadConfig {
       left: [],
       right: [],
     },
+    button_size: 128,
     enable_randomization: false,
     initial_duration: 0,
     max_offset_x: 200,
@@ -243,6 +256,7 @@ export function newDirectionPad(position: Position): DirectionPadConfig {
     random_distance_min_scale: default_random_distance_min_scale,
     random_offset_x: default_random_offset,
     random_offset_y: default_random_offset,
+    random_offset_algorithm: defaultRandomOffsetAlgorithm,
     jitter_offset_x: default_jitter_offset,
     jitter_offset_y: default_jitter_offset,
     script_hooks: defaultScriptHooks(),
@@ -269,9 +283,11 @@ export interface MouseCastSpellConfig {
   position: Position;
   random_offset_x: number;
   random_offset_y: number;
+  random_offset_algorithm: RandomOffsetAlgorithm;
   release_mode: MouseCastReleaseMode;
   script_hooks: MappingScriptHooks;
   type: "MouseCastSpell";
+  button_size: number;
   vertical_scale_factor: number;
 }
 
@@ -282,6 +298,7 @@ export function newMouseCastSpell(
   return {
     id: newMappingId(),
     bind: [],
+    button_size: defaultButtonSize,
     cast_no_direction: false,
     cast_radius: 200,
     center,
@@ -293,6 +310,7 @@ export function newMouseCastSpell(
     position,
     random_offset_x: default_random_offset,
     random_offset_y: default_random_offset,
+    random_offset_algorithm: defaultRandomOffsetAlgorithm,
     initial_duration: 0,
     release_mode: "OnRelease",
     script_hooks: defaultScriptHooks(),
@@ -400,9 +418,13 @@ export function newObservation(position: Position): ObservationConfig {
 export interface FpsConfig {
   id: string;
   bind: ButtonBinding;
+  button_size: number;
   note: string;
   pointer_id: number;
   position: Position;
+  random_offset_x: number;
+  random_offset_y: number;
+  random_offset_algorithm: RandomOffsetAlgorithm;
   sensitivity_x: number;
   sensitivity_y: number;
   max_offset_x: number;
@@ -425,9 +447,13 @@ export function newFps(position: Position): FpsConfig {
   return {
     id: newMappingId(),
     bind: [],
+    button_size: defaultButtonSize,
     note: "",
     pointer_id: 0,
     position,
+    random_offset_x: default_random_offset,
+    random_offset_y: default_random_offset,
+    random_offset_algorithm: defaultRandomOffsetAlgorithm,
     sensitivity_x: 0.8,
     sensitivity_y: 0.8,
     max_offset_x: 0,
@@ -440,12 +466,14 @@ export function newFps(position: Position): FpsConfig {
 export interface FireConfig {
   id: string;
   bind: ButtonBinding;
+  button_size: number;
   note: string;
   pointer_id: number;
   position: Position;
   preserve_fps_control: boolean;
   random_offset_x: number;
   random_offset_y: number;
+  random_offset_algorithm: RandomOffsetAlgorithm;
   sensitivity_x: number;
   sensitivity_y: number;
   script_hooks: MappingScriptHooks;
@@ -456,12 +484,14 @@ export function newFire(position: Position): FireConfig {
   return {
     id: newMappingId(),
     bind: [],
+    button_size: defaultButtonSize,
     note: "",
     pointer_id: 0,
     position,
     preserve_fps_control: true,
     random_offset_x: default_random_offset,
     random_offset_y: default_random_offset,
+    random_offset_algorithm: defaultRandomOffsetAlgorithm,
     sensitivity_x: 0.8,
     sensitivity_y: 0.8,
     script_hooks: defaultScriptHooks(),
@@ -601,9 +631,12 @@ export function normalizeMappingConfig(config: MappingConfig): MappingConfig {
           return {
             ...mapping,
             id,
+            button_size: mapping.button_size ?? defaultButtonSize,
             preserve_fps_control: mapping.preserve_fps_control ?? true,
             random_offset_x: withDefaultRandomOffset(mapping.random_offset_x),
             random_offset_y: withDefaultRandomOffset(mapping.random_offset_y),
+            random_offset_algorithm:
+              mapping.random_offset_algorithm ?? defaultRandomOffsetAlgorithm,
             script_hooks: withDefaultScriptHooks(mapping.script_hooks),
           };
         case "Observation":
@@ -618,20 +651,26 @@ export function normalizeMappingConfig(config: MappingConfig): MappingConfig {
           return {
             ...mapping,
             id,
+            button_size: mapping.button_size ?? defaultButtonSize,
             enable_initial_swipe_randomization:
               mapping.enable_initial_swipe_randomization ?? false,
             initial_duration: mapping.initial_duration ?? 0,
             random_offset_x: withDefaultRandomOffset(mapping.random_offset_x),
             random_offset_y: withDefaultRandomOffset(mapping.random_offset_y),
+            random_offset_algorithm:
+              mapping.random_offset_algorithm ?? defaultRandomOffsetAlgorithm,
             script_hooks: withDefaultScriptHooks(mapping.script_hooks),
           };
         case "DirectionPad":
           return {
             ...mapping,
             id,
+            button_size: mapping.button_size ?? 128,
             enable_randomization: mapping.enable_randomization ?? false,
             random_offset_x: withDefaultRandomOffset(mapping.random_offset_x),
             random_offset_y: withDefaultRandomOffset(mapping.random_offset_y),
+            random_offset_algorithm:
+              mapping.random_offset_algorithm ?? defaultRandomOffsetAlgorithm,
             random_distance_min_scale:
               mapping.random_distance_min_scale ??
               default_random_distance_min_scale,
@@ -668,6 +707,11 @@ export function normalizeMappingConfig(config: MappingConfig): MappingConfig {
             return {
               ...normalized,
               id,
+              button_size: normalized.button_size ?? defaultButtonSize,
+              random_offset_x: withDefaultRandomOffset(normalized.random_offset_x),
+              random_offset_y: withDefaultRandomOffset(normalized.random_offset_y),
+              random_offset_algorithm:
+                normalized.random_offset_algorithm ?? defaultRandomOffsetAlgorithm,
               max_offset_x: normalized.max_offset_x ?? 0,
               max_offset_y: normalized.max_offset_y ?? 0,
               touch_mode: normalizeFpsTouchMode(normalized.touch_mode),
