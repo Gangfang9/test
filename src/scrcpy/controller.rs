@@ -128,7 +128,13 @@ impl Controller {
         ws_tx: broadcast::Sender<WebSocketNotification>,
     ) {
         log::info!("[Controller] {}: {}", t!("scrcpy.startingController"), addr);
-        let listener = TcpListener::bind(addr).await.unwrap();
+        let listener = match TcpListener::bind(addr).await {
+            Ok(listener) => listener,
+            Err(error) => {
+                log::error!("[Controller] failed to bind {}: {}", addr, error);
+                return;
+            }
+        };
 
         // scrcpy device msg handler
         let (cr_tx, cr_rx) = mpsc::unbounded_channel::<ScrcpyDeviceMsg>();

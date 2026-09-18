@@ -57,7 +57,13 @@ impl Server {
     ) {
         log::info!("[WebServe] {}: {}", t!("web.server.startingOn"), addr);
 
-        let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+        let listener = match tokio::net::TcpListener::bind(addr).await {
+            Ok(listener) => listener,
+            Err(error) => {
+                log::error!("[WebServer] failed to bind {}: {}", addr, error);
+                return;
+            }
+        };
 
         let ip_str = if addr.ip().is_unspecified() || addr.ip().is_loopback() {
             "localhost"

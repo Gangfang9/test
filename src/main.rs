@@ -1,6 +1,6 @@
 use std::{
     fs::File,
-    net::{Ipv4Addr, SocketAddrV4},
+    net::{Ipv4Addr, SocketAddrV4, TcpListener},
     sync::OnceLock,
 };
 
@@ -29,6 +29,40 @@ use tokio::sync::{broadcast, mpsc, oneshot};
 use tracing_appender::non_blocking::WorkerGuard;
 
 static LOG_GUARD: OnceLock<WorkerGuard> = OnceLock::new();
+
+const PORT_FALLBACK_ATTEMPTS: u16 = 512;
+
+fn server_ports_available(config: &LocalConfig, controller_port: u16, web_port: u16) -> bool {
+    if controller_port == web_port {
+        return false;
+    }
+
+    let Ok(controller_listener) = TcpListener::bind(SocketAddrV4::new(
+        Ipv4Addr::LOCALHOST,
+        controller_port,
+    )) else {
+        return false;
+    };
+    let Ok(web_listener) = TcpListener::bind(SocketAddrV4::new(config.web_bind_addr, web_port))
+    else {
+        return false;
+    };
+
+    drop(web_listener);
+    drop(controller_listener);
+    true
+}
+
+fn select_available_server_ports(config: &LocalConfig) -> Option<(u16, u16)> {
+    for offset in 0..=PORT_FALLBACK_ATTEMPTS {
+        let controller_port = config.controller_port.checked_add(offset)?;
+        let web_port = config.web_port.checked_add(offset)?;
+        if server_ports_available(config, controller_port, web_port) {
+            return Some((controller_port, web_port));
+        }
+    }
+    None
+}
 
 fn log_custom_layer(_app: &mut App) -> Option<BoxedLayer> {
     let file = File::create(relate_to_data_path(["app.log"])).unwrap_or_else(|e| {
@@ -62,6 +96,20 @@ fn main() {
     } else {
         rust_i18n::set_locale(DEFAULT_LANGUAGE);
         LocalConfig::set_language(DEFAULT_LANGUAGE.to_string());
+        local_config = LocalConfig::get();
+    }
+
+    let Some((controller_port, web_port)) = select_available_server_ports(&local_config) else {
+        eprintln!("Unable to find available local ports for LE KeyMapper.");
+        return;
+    };
+    if controller_port != local_config.controller_port || web_port != local_config.web_port {
+        println!(
+            "Configured ports are occupied; switching controller {} -> {} and web {} -> {}.",
+            local_config.controller_port, controller_port, local_config.web_port, web_port
+        );
+        LocalConfig::set_controller_port(controller_port);
+        LocalConfig::set_web_port(web_port);
         local_config = LocalConfig::get();
     }
     // update config file
