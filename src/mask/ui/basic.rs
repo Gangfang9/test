@@ -549,7 +549,6 @@ fn handle_titlebar_buttons(
     pushpin_query: Query<&Interaction, (With<PushpinButton>, Changed<Interaction>)>,
     close_query: Query<&Interaction, (With<CloseButton>, Changed<Interaction>)>,
     d_tx: Res<ChannelSenderD>,
-    mut app_exit: MessageWriter<AppExit>,
 ) {
     for interaction in minimize_query.iter() {
         if *interaction == Interaction::Pressed {
@@ -574,7 +573,6 @@ fn handle_titlebar_buttons(
                     .0
                     .send(ControllerCommand::ShutdownMain(device.scid.clone()));
             }
-            app_exit.write(AppExit::Success);
         }
     }
 }

@@ -1,7 +1,9 @@
 use std::{
     fs::File,
-    net::{Ipv4Addr, SocketAddrV4, TcpListener},
+    io::{Read, Write},
+    net::{Ipv4Addr, SocketAddr, SocketAddrV4, TcpListener, TcpStream},
     sync::OnceLock,
+    time::Duration,
 };
 
 use bevy::{
@@ -31,6 +33,43 @@ use tracing_appender::non_blocking::WorkerGuard;
 static LOG_GUARD: OnceLock<WorkerGuard> = OnceLock::new();
 
 const PORT_FALLBACK_ATTEMPTS: u16 = 512;
+
+fn existing_instance_url(config: &LocalConfig) -> Option<String> {
+    let connect_ip = if config.web_bind_addr.is_unspecified() {
+        Ipv4Addr::LOCALHOST
+    } else {
+        config.web_bind_addr
+    };
+    let addr = SocketAddr::V4(SocketAddrV4::new(connect_ip, config.web_port));
+    let mut stream = TcpStream::connect_timeout(&addr, Duration::from_millis(500)).ok()?;
+    stream
+        .set_read_timeout(Some(Duration::from_millis(800)))
+        .ok()?;
+    stream
+        .set_write_timeout(Some(Duration::from_millis(800)))
+        .ok()?;
+    stream
+        .write_all(
+            b"GET /api/config/get_config HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+        )
+        .ok()?;
+
+    let mut response = String::new();
+    stream.read_to_string(&mut response).ok()?;
+    if !response.starts_with("HTTP/1.1 200")
+        || !response.contains("\"web_port\"")
+        || !response.contains("\"controller_port\"")
+    {
+        return None;
+    }
+
+    let host = if config.web_bind_addr.is_unspecified() || config.web_bind_addr.is_loopback() {
+        "127.0.0.1".to_string()
+    } else {
+        config.web_bind_addr.to_string()
+    };
+    Some(format!("http://{}:{}", host, config.web_port))
+}
 
 fn server_ports_available(config: &LocalConfig, controller_port: u16, web_port: u16) -> bool {
     if controller_port == web_port {
@@ -97,6 +136,14 @@ fn main() {
         rust_i18n::set_locale(DEFAULT_LANGUAGE);
         LocalConfig::set_language(DEFAULT_LANGUAGE.to_string());
         local_config = LocalConfig::get();
+    }
+
+    if let Some(url) = existing_instance_url(&local_config) {
+        println!("LE KeyMapper is already running. Opening {}", url);
+        if let Err(error) = opener::open(&url) {
+            eprintln!("Failed to open the existing LE KeyMapper page: {}", error);
+        }
+        return;
     }
 
     let Some((controller_port, web_port)) = select_available_server_ports(&local_config) else {
