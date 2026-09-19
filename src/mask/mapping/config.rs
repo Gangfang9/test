@@ -484,43 +484,6 @@ pub fn validate_mapping_config_diagnostics(
         let mapping_index = count as usize;
         let id = mapping.id();
 
-        if !matches!(
-            mapping,
-            MappingType::DirectionPad(_)
-                | MappingType::Fps(_)
-                | MappingType::Fire(_)
-                | MappingType::MouseCastSpell(_)
-        ) {
-            diagnostics.push(MappingDiagnostic::mapping(
-                "mapping.mvp.unsupportedType",
-                format!("{mapping_type} is not available in the MVP"),
-                mapping_type,
-                mapping_index,
-                id,
-            ));
-        }
-
-        let has_scripts = match mapping {
-            MappingType::DirectionPad(mapping) => {
-                !mapping.script_hooks.before_script.trim().is_empty()
-                    || !mapping.script_hooks.after_script.trim().is_empty()
-            }
-            MappingType::Fire(mapping) => {
-                !mapping.script_hooks.before_script.trim().is_empty()
-                    || !mapping.script_hooks.after_script.trim().is_empty()
-            }
-            _ => false,
-        };
-        if has_scripts {
-            diagnostics.push(MappingDiagnostic::mapping(
-                "mapping.mvp.scriptsDisabled",
-                "Mapping scripts are disabled in the MVP".to_string(),
-                mapping_type,
-                mapping_index,
-                id,
-            ));
-        }
-
         if count > 32 {
             diagnostics.push(MappingDiagnostic::mapping(
                 "mapping.config.tooManyMappings",
@@ -861,15 +824,11 @@ pub fn save_mapping_config(config: &MappingConfig, path: &Path) -> Result<(), St
 }
 
 #[cfg(test)]
-mod mvp_tests {
-    use super::{
-        MappingConfig, MappingType, default_mapping_config, validate_mapping_config,
-        validate_mapping_config_diagnostics,
-    };
-    use serde_json::json;
+mod config_tests {
+    use super::{MappingType, default_mapping_config, validate_mapping_config};
 
     #[test]
-    fn default_mapping_contains_only_mvp_controls() {
+    fn default_mapping_is_valid() {
         let config = default_mapping_config();
 
         assert_eq!(config.mappings.len(), 3);
@@ -880,83 +839,13 @@ mod mvp_tests {
     }
 
     #[test]
-    fn rejects_mapping_types_outside_the_mvp() {
-        let config: MappingConfig = serde_json::from_value(json!({
-            "version": "0.1.0",
-            "original_size": { "width": 1920, "height": 1080 },
-            "mappings": [{
-                "type": "SingleTap",
-                "id": "unsupported-tap",
-                "note": "",
-                "pointer_id": 1,
-                "position": { "x": 100, "y": 100 },
-                "bind": ["Space"],
-                "duration": 50,
-                "sync": false,
-                "script_hooks": { "before_script": "", "after_script": "" }
-            }]
-        }))
-        .unwrap();
-
-        let diagnostics = validate_mapping_config_diagnostics(&config);
-        assert!(
-            diagnostics
-                .iter()
-                .any(|item| item.code == "mapping.mvp.unsupportedType")
-        );
-    }
-
-    #[test]
-    fn accepts_mouse_cast_spell_in_the_mvp() {
-        let config: MappingConfig = serde_json::from_value(json!({
-            "version": "0.1.0",
-            "original_size": { "width": 1920, "height": 1080 },
-            "mappings": [{
-                "type": "MouseCastSpell",
-                "id": "medicine-wheel",
-                "note": "360 degree medicine selection",
-                "pointer_id": 3,
-                "position": { "x": 960, "y": 540 },
-                "button_size": 52,
-                "center": { "x": 960, "y": 540 },
-                "horizontal_scale_factor": 7,
-                "vertical_scale_factor": 10,
-                "drag_radius": 150,
-                "cast_radius": 200,
-                "release_mode": "OnRelease",
-                "cast_no_direction": false,
-                "initial_duration": 0,
-                "enable_initial_swipe_randomization": false,
-                "bind": ["Tab"],
-                "random_offset_x": 0,
-                "random_offset_y": 0,
-                "random_offset_algorithm": "ExtremeRandom",
-                "script_hooks": { "before_script": "", "after_script": "" }
-            }]
-        }))
-        .unwrap();
-
-        let diagnostics = validate_mapping_config_diagnostics(&config);
-        assert!(
-            diagnostics
-                .iter()
-                .all(|item| item.code != "mapping.mvp.unsupportedType")
-        );
-    }
-
-    #[test]
-    fn rejects_mapping_scripts_in_the_mvp() {
+    fn accepts_valid_mapping_scripts() {
         let mut config = default_mapping_config();
         let MappingType::DirectionPad(mapping) = &mut config.mappings[0] else {
             panic!("expected the default WASD mapping");
         };
         mapping.script_hooks.before_script = "sleep(1)".to_string();
 
-        let diagnostics = validate_mapping_config_diagnostics(&config);
-        assert!(
-            diagnostics
-                .iter()
-                .any(|item| item.code == "mapping.mvp.scriptsDisabled")
-        );
+        assert!(validate_mapping_config(&config).is_ok());
     }
 }
