@@ -110,12 +110,16 @@ jobs:
         shell: pwsh
         run: |
           . ./scripts/ffmpeg-env.ps1
-          $rustOutput = cargo test --lib --message-format=short 2>&1 |
+          $rustOutput = cargo test --all-targets --message-format=short 2>&1 |
             Tee-Object -FilePath "$env:RUNNER_TEMP\rust-test.log"
           $rustExitCode = $LASTEXITCODE
           if ($rustExitCode -ne 0) {
             $rustOutput |
-              Select-Object -Last 40 |
+              Where-Object {
+                $_ -match 'error(\[|:)' -or
+                $_ -match 'FAILED|panicked|failures:|test result:'
+              } |
+              Select-Object -Last 30 |
               ForEach-Object {
                 $message = $_.ToString().Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
                 Write-Output "::error title=Rust compiler::$message"
@@ -125,7 +129,23 @@ jobs:
 
       - name: Build Windows package
         shell: pwsh
-        run: ./scripts/package-windows.ps1
+        run: |
+          $packageOutput = ./scripts/package-windows.ps1 2>&1 |
+            Tee-Object -FilePath "$env:RUNNER_TEMP\windows-package.log"
+          $packageExitCode = $LASTEXITCODE
+          if ($packageExitCode -ne 0) {
+            $packageOutput |
+              Where-Object {
+                $_ -match 'error(\[|:)' -or
+                $_ -match 'failed|exception|not found|cannot|unable'
+              } |
+              Select-Object -Last 30 |
+              ForEach-Object {
+                $message = $_.ToString().Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+                Write-Output "::error title=Windows package::$message"
+              }
+            exit $packageExitCode
+          }
 
       - name: Upload LE KeyMapper MVP
         uses: actions/upload-artifact@v4

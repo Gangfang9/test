@@ -844,7 +844,7 @@ mod config_tests {
         let MappingType::DirectionPad(mapping) = &mut config.mappings[0] else {
             panic!("expected the default WASD mapping");
         };
-        mapping.script_hooks.before_script = "sleep(1)".to_string();
+        mapping.script_hooks.before_script = "wait(1)".to_string();
 
         assert!(validate_mapping_config(&config).is_ok());
     }
