@@ -57,7 +57,7 @@ pub struct PendingWindowFocus {
 }
 
 #[derive(SystemParam)]
-struct NativeWindowUi<'w, 's> {
+pub(crate) struct NativeWindowUi<'w, 's> {
     pending_focus: ResMut<'w, PendingWindowFocus>,
     dashboard: Query<
         'w,

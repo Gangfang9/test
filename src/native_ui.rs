@@ -18,7 +18,6 @@ const MUTED: Color = Color::srgb(0.62, 0.64, 0.68);
 const ACCENT: Color = Color::srgb(0.78, 0.12, 0.09);
 const ACCENT_HOVER: Color = Color::srgb(0.92, 0.18, 0.13);
 const INFO: Color = Color::srgb(0.045, 0.11, 0.22);
-const SUCCESS: Color = Color::srgb(0.25, 0.85, 0.38);
 
 #[derive(Component)]
 pub struct NativeDashboardRoot;
