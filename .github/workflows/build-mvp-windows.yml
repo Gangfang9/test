@@ -110,7 +110,19 @@ jobs:
         shell: pwsh
         run: |
           . ./scripts/ffmpeg-env.ps1
-          cargo test --lib
+          $rustOutput = cargo test --lib --message-format=short 2>&1 |
+            Tee-Object -FilePath "$env:RUNNER_TEMP\rust-test.log"
+          $rustExitCode = $LASTEXITCODE
+          if ($rustExitCode -ne 0) {
+            $rustOutput |
+              Where-Object { $_ -match '(^|:) (error|warning)(\[|:)' } |
+              Select-Object -Last 40 |
+              ForEach-Object {
+                $message = $_.ToString().Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+                Write-Output "::error title=Rust compiler::$message"
+              }
+            exit $rustExitCode
+          }
 
       - name: Build Windows package
         shell: pwsh
