@@ -678,7 +678,14 @@ fn handle_native_navigation(
     orientation: Query<&Interaction, (With<CycleOrientationButton>, Changed<Interaction>)>,
     mut page: ResMut<NativePage>,
     mut window: Single<&mut Window>,
-    mut device_page: Query<&mut Node, With<NativeDevicePage>>,
+    mut device_page: Query<
+        &mut Node,
+        (
+            With<NativeDevicePage>,
+            Without<NativeMappingPage>,
+            Without<NativeSettingsPage>,
+        ),
+    >,
     mut mapping_page: Query<
         &mut Node,
         (
@@ -785,8 +792,22 @@ fn receive_native_results(
 
 fn sync_native_dashboard(
     state: Res<NativeDeviceState>,
-    mut identities: Query<&mut Text, With<DeviceIdentityText>>,
-    mut statuses: Query<&mut Text, (With<DeviceStatusText>, Without<DeviceIdentityText>)>,
+    mut identities: Query<
+        &mut Text,
+        (
+            With<DeviceIdentityText>,
+            Without<DeviceStatusText>,
+            Without<FooterStatusText>,
+        ),
+    >,
+    mut statuses: Query<
+        &mut Text,
+        (
+            With<DeviceStatusText>,
+            Without<DeviceIdentityText>,
+            Without<FooterStatusText>,
+        ),
+    >,
     mut footer: Query<
         &mut Text,
         (
@@ -845,15 +866,26 @@ fn native_button_style(
 
 fn native_navigation_style(
     page: Res<NativePage>,
-    mut nav: Query<(&NativeNavButton, &Interaction, &mut BackgroundColor)>,
+    mut nav: Query<
+        (&NativeNavButton, &Interaction, &mut BackgroundColor),
+        (
+            Without<MappingFileButton>,
+            Without<ToggleAlwaysOnTopButton>,
+            Without<ToggleTitlebarButton>,
+            Without<CycleOrientationButton>,
+        ),
+    >,
     mut controls: Query<
         (&Interaction, &mut BackgroundColor),
-        Or<(
-            With<MappingFileButton>,
-            With<ToggleAlwaysOnTopButton>,
-            With<ToggleTitlebarButton>,
-            With<CycleOrientationButton>,
-        )>,
+        (
+            Without<NativeNavButton>,
+            Or<(
+                With<MappingFileButton>,
+                With<ToggleAlwaysOnTopButton>,
+                With<ToggleTitlebarButton>,
+                With<CycleOrientationButton>,
+            )>,
+        ),
     >,
 ) {
     for (button, interaction, mut background) in nav.iter_mut() {
