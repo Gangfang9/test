@@ -88,7 +88,7 @@ impl Plugin for NativeUiPlugin {
 fn ui_text(font: Handle<Font>, size: f32, color: Color) -> (TextFont, TextColor) {
     (
         TextFont {
-            font,
+            font: font.into(),
             font_size: FontSize::Px(size),
             ..default()
         },
@@ -504,7 +504,14 @@ fn sync_native_dashboard(
     state: Res<NativeDeviceState>,
     mut identities: Query<&mut Text, With<DeviceIdentityText>>,
     mut statuses: Query<&mut Text, (With<DeviceStatusText>, Without<DeviceIdentityText>)>,
-    mut footer: Query<&mut Text, (With<FooterStatusText>, Without<DeviceStatusText>)>,
+    mut footer: Query<
+        &mut Text,
+        (
+            With<FooterStatusText>,
+            Without<DeviceStatusText>,
+            Without<DeviceIdentityText>,
+        ),
+    >,
 ) {
     if !state.is_changed() {
         return;

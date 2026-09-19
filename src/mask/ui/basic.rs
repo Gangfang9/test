@@ -495,6 +495,7 @@ fn handle_titlebar_drag(
 
 fn handle_titlebar_buttons(
     mut window: Single<&mut Window>,
+    mut maximized: Local<bool>,
     minimize_query: Query<&Interaction, (With<MinimizeButton>, Changed<Interaction>)>,
     maximize_query: Query<&Interaction, (With<MaximizeButton>, Changed<Interaction>)>,
     pushpin_query: Query<&Interaction, (With<PushpinButton>, Changed<Interaction>)>,
@@ -508,7 +509,8 @@ fn handle_titlebar_buttons(
     }
     for interaction in maximize_query.iter() {
         if *interaction == Interaction::Pressed {
-            window.set_maximized(!window.maximized);
+            *maximized = !*maximized;
+            window.set_maximized(*maximized);
         }
     }
     for interaction in pushpin_query.iter() {
