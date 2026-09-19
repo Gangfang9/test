@@ -1,5 +1,6 @@
 pub mod config;
 pub mod mask;
+pub mod native_ui;
 pub mod scrcpy;
 pub mod tokio_tasks;
 pub mod utils;

@@ -91,6 +91,41 @@ async fn device_list() -> Result<JsonResponse, WebServerError> {
     ))
 }
 
+pub fn list_usb_devices() -> Result<Vec<Device>, String> {
+    let config = LocalConfig::get();
+    Adb::new(config.adb_path)
+        .devices()
+        .map(|devices| {
+            devices
+                .into_iter()
+                .filter(|device| is_usb_device_id(&device.id))
+                .collect()
+        })
+}
+
+pub async fn start_usb_device(
+    device_id: &str,
+    d_tx: &UnboundedSender<ControllerCommand>,
+    ws_tx: &broadcast::Sender<WebSocketNotification>,
+) -> Result<(), String> {
+    _control_device(device_id, d_tx, ws_tx)
+        .await
+        .map(|_| ())
+        .map_err(|error| error.1)
+}
+
+pub fn restart_adb_and_list_usb_devices() -> Result<Vec<Device>, String> {
+    let config = LocalConfig::get();
+    Adb::new(config.adb_path)
+        .restart_server()
+        .map(|devices| {
+            devices
+                .into_iter()
+                .filter(|device| is_usb_device_id(&device.id))
+                .collect()
+        })
+}
+
 fn gen_scid() -> String {
     let mut rng = rand::rng();
     let suffix: String = (0..6)

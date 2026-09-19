@@ -11,8 +11,9 @@ use crate::{
             cursor::{CursorPosition, CursorState},
             script_helper::{ScriptAST, ScriptRuntimeCommandSender, ScriptSharedState},
         },
-        ui::basic::TITLEBAR_HEIGHT,
+        ui::basic::{ProjectionBodyMarker, TITLEBAR_HEIGHT},
     },
+    native_ui::NativeDashboardRoot,
     tokio_tasks::TokioTasksRuntime,
     utils::{ChannelReceiverM, ChannelSenderCS},
 };
@@ -77,6 +78,8 @@ pub fn handle_mask_command(
     mut mask_size: ResMut<MaskSize>,
     mut titlebar_state: ResMut<TitlebarState>,
     mut pending_focus: ResMut<PendingWindowFocus>,
+    mut dashboard_query: Query<&mut Node, (With<NativeDashboardRoot>, Without<ProjectionBodyMarker>)>,
+    mut projection_query: Query<&mut Node, (With<ProjectionBodyMarker>, Without<NativeDashboardRoot>)>,
     runtime: ResMut<TokioTasksRuntime>,
 ) {
     for (msg, oneshot_tx) in m_rx.0.try_iter() {
@@ -129,14 +132,27 @@ pub fn handle_mask_command(
                     window.visible = true;
                     window.focused = false;
                     pending_focus.frames_remaining = 2;
+                    for mut node in dashboard_query.iter_mut() {
+                        node.display = Display::None;
+                    }
+                    for mut node in projection_query.iter_mut() {
+                        node.display = Display::Flex;
+                    }
                     t!("mask.mainDeviceConnected").to_string()
                 } else {
                     next_cursor_state.set(CursorState::Normal);
                     next_mapping_state.set(MappingState::Stop);
                     log::info!("[Mapping] {}", t!("mask.exitStopMappingMode"));
-                    window.visible = false;
-                    window.focused = false;
+                    window.visible = true;
+                    window.focused = true;
                     pending_focus.frames_remaining = 0;
+                    window.resolution.set(1280., 760. + TITLEBAR_HEIGHT);
+                    for mut node in dashboard_query.iter_mut() {
+                        node.display = Display::Flex;
+                    }
+                    for mut node in projection_query.iter_mut() {
+                        node.display = Display::None;
+                    }
                     t!("mask.mainDeviceDisconnected").to_string()
                 };
                 log::info!("[Mask] {}", msg);

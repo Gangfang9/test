@@ -16,6 +16,7 @@ use scrcpy_mask::{
     config::LocalConfig,
     is_available_language,
     mask::{MaskPlugins, mask_command::MaskCommand},
+    native_ui::NativeUiPlugin,
     scrcpy::{
         control_msg::ScrcpyControlMsg,
         controller::{self, ControllerCommand},
@@ -31,62 +32,52 @@ use tokio::sync::{broadcast, mpsc, oneshot};
 use tracing_appender::non_blocking::WorkerGuard;
 
 static LOG_GUARD: OnceLock<WorkerGuard> = OnceLock::new();
-
 const PORT_FALLBACK_ATTEMPTS: u16 = 512;
 
-fn existing_instance_url(config: &LocalConfig) -> Option<String> {
+fn existing_instance(config: &LocalConfig) -> bool {
     let connect_ip = if config.web_bind_addr.is_unspecified() {
         Ipv4Addr::LOCALHOST
     } else {
         config.web_bind_addr
     };
     let addr = SocketAddr::V4(SocketAddrV4::new(connect_ip, config.web_port));
-    let mut stream = TcpStream::connect_timeout(&addr, Duration::from_millis(500)).ok()?;
-    stream
-        .set_read_timeout(Some(Duration::from_millis(800)))
-        .ok()?;
-    stream
-        .set_write_timeout(Some(Duration::from_millis(800)))
-        .ok()?;
-    stream
-        .write_all(
-            b"GET /api/config/get_config HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
-        )
-        .ok()?;
-
-    let mut response = String::new();
-    stream.read_to_string(&mut response).ok()?;
-    if !response.starts_with("HTTP/1.1 200")
-        || !response.contains("\"web_port\"")
-        || !response.contains("\"controller_port\"")
-    {
-        return None;
-    }
-
-    let host = if config.web_bind_addr.is_unspecified() || config.web_bind_addr.is_loopback() {
-        "127.0.0.1".to_string()
-    } else {
-        config.web_bind_addr.to_string()
+    let Ok(mut stream) = TcpStream::connect_timeout(&addr, Duration::from_millis(500)) else {
+        return false;
     };
-    Some(format!("http://{}:{}", host, config.web_port))
+    if stream
+        .set_read_timeout(Some(Duration::from_millis(800)))
+        .is_err()
+        || stream
+            .set_write_timeout(Some(Duration::from_millis(800)))
+            .is_err()
+        || stream
+            .write_all(
+                b"GET /api/config/get_config HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+            )
+            .is_err()
+    {
+        return false;
+    }
+    let mut response = String::new();
+    stream.read_to_string(&mut response).is_ok()
+        && response.starts_with("HTTP/1.1 200")
+        && response.contains("\"web_port\"")
+        && response.contains("\"controller_port\"")
 }
 
 fn server_ports_available(config: &LocalConfig, controller_port: u16, web_port: u16) -> bool {
     if controller_port == web_port {
         return false;
     }
-
-    let Ok(controller_listener) = TcpListener::bind(SocketAddrV4::new(
-        Ipv4Addr::LOCALHOST,
-        controller_port,
-    )) else {
+    let Ok(controller_listener) =
+        TcpListener::bind(SocketAddrV4::new(Ipv4Addr::LOCALHOST, controller_port))
+    else {
         return false;
     };
     let Ok(web_listener) = TcpListener::bind(SocketAddrV4::new(config.web_bind_addr, web_port))
     else {
         return false;
     };
-
     drop(web_listener);
     drop(controller_listener);
     true
@@ -138,11 +129,8 @@ fn main() {
         local_config = LocalConfig::get();
     }
 
-    if let Some(url) = existing_instance_url(&local_config) {
-        println!("LE KeyMapper is already running. Opening {}", url);
-        if let Err(error) = opener::open(&url) {
-            eprintln!("Failed to open the existing LE KeyMapper page: {}", error);
-        }
+    if existing_instance(&local_config) {
+        eprintln!("LE KeyMapper is already running.");
         return;
     }
 
@@ -179,8 +167,8 @@ fn main() {
                     decorations: false,
                     present_mode: PresentMode::AutoVsync,
                     resizable: true,
-                    visible: false,
-                    focused: false,
+                    visible: true,
+                    focused: true,
                     window_level: if local_config.always_on_top {
                         WindowLevel::AlwaysOnTop
                     } else {
@@ -195,6 +183,7 @@ fn main() {
     )
     .add_plugins(TokioTasksPlugin::default())
     .add_plugins(MaskPlugins)
+    .add_plugins(NativeUiPlugin)
     .add_systems(Startup, start_servers);
 
     #[cfg(target_os = "macos")]
@@ -245,6 +234,15 @@ fn start_servers(mut commands: Commands) {
     commands.insert_resource(ChannelReceiverM(m_rx));
     commands.insert_resource(ChannelSenderD(d_tx.clone()));
     commands.insert_resource(ChannelSenderWS(ws_tx.clone()));
-    web::Server::start(web_addr, cs_tx.clone(), d_tx, m_tx.clone(), ws_tx.clone());
+    // Keep the complete legacy API available during the native migration, but
+    // never open a browser. Remove this only after native feature parity.
+    web::Server::start(
+        web_addr,
+        cs_tx.clone(),
+        d_tx,
+        m_tx.clone(),
+        ws_tx.clone(),
+        false,
+    );
     controller::Controller::start(controller_addr, cs_tx, v_channel, d_rx, m_tx, ws_tx);
 }

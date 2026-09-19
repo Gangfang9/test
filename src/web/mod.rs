@@ -36,6 +36,7 @@ impl Server {
         d_tx: UnboundedSender<ControllerCommand>,
         m_tx: crossbeam_channel::Sender<(MaskCommand, oneshot::Sender<Result<String, String>>)>,
         ws_tx: broadcast::Sender<WebSocketNotification>,
+        open_browser: bool,
     ) {
         thread::spawn(move || {
             tokio::runtime::Builder::new_multi_thread()
@@ -43,7 +44,7 @@ impl Server {
                 .build()
                 .unwrap()
                 .block_on(async move {
-                    Server::run_server(addr, cs_tx, d_tx, m_tx, ws_tx).await;
+                    Server::run_server(addr, cs_tx, d_tx, m_tx, ws_tx, open_browser).await;
                 });
         });
     }
@@ -54,6 +55,7 @@ impl Server {
         d_tx: UnboundedSender<ControllerCommand>,
         m_tx: crossbeam_channel::Sender<(MaskCommand, oneshot::Sender<Result<String, String>>)>,
         ws_tx: broadcast::Sender<WebSocketNotification>,
+        open_browser: bool,
     ) {
         log::info!("[WebServe] {}: {}", t!("web.server.startingOn"), addr);
 
@@ -77,9 +79,11 @@ impl Server {
             url
         );
 
-        opener::open(url).unwrap_or_else(|e| {
-            log::error!("[WebServe] {}: {}", t!("web.server.failedToOpenBrowser"), e)
-        });
+        if open_browser {
+            opener::open(url).unwrap_or_else(|e| {
+                log::error!("[WebServe] {}: {}", t!("web.server.failedToOpenBrowser"), e)
+            });
+        }
 
         axum::serve(listener, Self::app(cs_tx, d_tx, m_tx, ws_tx))
             .await

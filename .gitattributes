@@ -3,3 +3,5 @@ icons/** binary
 frontend/src/assets/128x128.png binary
 assets/scrcpy-mask-server-* binary
 assets/icons/** binary
+assets/fonts/** binary
+docs/ui/** binary

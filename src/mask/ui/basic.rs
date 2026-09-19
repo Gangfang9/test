@@ -36,6 +36,9 @@ pub struct MaskContentMarker;
 pub struct TitlebarMarker;
 
 #[derive(Component)]
+pub struct ProjectionBodyMarker;
+
+#[derive(Component)]
 struct TitlebarTitleMarker;
 
 #[derive(Component)]
@@ -294,13 +297,17 @@ fn setup_ui(
     });
 
     let body_entity = commands
-        .spawn(Node {
-            width: Val::Percent(100.),
-            flex_grow: 1.,
-            flex_direction: FlexDirection::Row,
-            min_height: Val::Px(0.),
-            ..default()
-        })
+        .spawn((
+            Node {
+                width: Val::Percent(100.),
+                flex_grow: 1.,
+                flex_direction: FlexDirection::Row,
+                min_height: Val::Px(0.),
+                display: Display::None,
+                ..default()
+            },
+            ProjectionBodyMarker,
+        ))
         .id();
 
     // Parent hierarchy: titlebar on top; video and device toolbar below.
