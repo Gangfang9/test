@@ -1,4 +1,4 @@
-use bevy::{prelude::*, window::WindowLevel};
+use bevy::{ecs::system::SystemParam, prelude::*, window::WindowLevel};
 use bevy_ineffable::prelude::IneffableCommands;
 use rust_i18n::t;
 
@@ -56,6 +56,23 @@ pub struct PendingWindowFocus {
     frames_remaining: u8,
 }
 
+#[derive(SystemParam)]
+struct NativeWindowUi<'w, 's> {
+    pending_focus: ResMut<'w, PendingWindowFocus>,
+    dashboard: Query<
+        'w,
+        's,
+        &'static mut Node,
+        (With<NativeDashboardRoot>, Without<ProjectionBodyMarker>),
+    >,
+    projection: Query<
+        'w,
+        's,
+        &'static mut Node,
+        (With<ProjectionBodyMarker>, Without<NativeDashboardRoot>),
+    >,
+}
+
 impl TitlebarState {
     pub fn offset(&self) -> f32 {
         if self.visible { TITLEBAR_HEIGHT } else { 0.0 }
@@ -77,9 +94,7 @@ pub fn handle_mask_command(
     mut active_mapping: ResMut<ActiveMappingConfig>,
     mut mask_size: ResMut<MaskSize>,
     mut titlebar_state: ResMut<TitlebarState>,
-    mut pending_focus: ResMut<PendingWindowFocus>,
-    mut dashboard_query: Query<&mut Node, (With<NativeDashboardRoot>, Without<ProjectionBodyMarker>)>,
-    mut projection_query: Query<&mut Node, (With<ProjectionBodyMarker>, Without<NativeDashboardRoot>)>,
+    mut native_ui: NativeWindowUi,
     runtime: ResMut<TokioTasksRuntime>,
 ) {
     for (msg, oneshot_tx) in m_rx.0.try_iter() {
@@ -131,11 +146,11 @@ pub fn handle_mask_command(
                     log::info!("[Mapping] {}", t!("mask.enterNormalMappingMode"));
                     window.visible = true;
                     window.focused = false;
-                    pending_focus.frames_remaining = 2;
-                    for mut node in dashboard_query.iter_mut() {
+                    native_ui.pending_focus.frames_remaining = 2;
+                    for mut node in native_ui.dashboard.iter_mut() {
                         node.display = Display::None;
                     }
-                    for mut node in projection_query.iter_mut() {
+                    for mut node in native_ui.projection.iter_mut() {
                         node.display = Display::Flex;
                     }
                     t!("mask.mainDeviceConnected").to_string()
@@ -145,12 +160,12 @@ pub fn handle_mask_command(
                     log::info!("[Mapping] {}", t!("mask.exitStopMappingMode"));
                     window.visible = true;
                     window.focused = true;
-                    pending_focus.frames_remaining = 0;
+                    native_ui.pending_focus.frames_remaining = 0;
                     window.resolution.set(1280., 760. + TITLEBAR_HEIGHT);
-                    for mut node in dashboard_query.iter_mut() {
+                    for mut node in native_ui.dashboard.iter_mut() {
                         node.display = Display::Flex;
                     }
-                    for mut node in projection_query.iter_mut() {
+                    for mut node in native_ui.projection.iter_mut() {
                         node.display = Display::None;
                     }
                     t!("mask.mainDeviceDisconnected").to_string()

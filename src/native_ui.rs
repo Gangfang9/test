@@ -318,7 +318,7 @@ fn setup_native_dashboard(
                             .with_child((
                                 Text::new("连接设备后\n点击“投屏”"),
                                 ui_text(font.clone(), 16., MUTED),
-                                TextLayout::new_with_justify(Justify::Center),
+                                TextLayout::justify(Justify::Center),
                             ));
                             preview.spawn((
                                 Text::new("USB  •  ADB"),
@@ -446,13 +446,12 @@ fn handle_native_buttons(
         });
     }
     if start.iter().any(|interaction| *interaction == Interaction::Pressed) {
-        let Some(device) = state.devices.first() else {
+        let Some(device_id) = state.devices.first().map(|device| device.id.clone()) else {
             state.status = "没有可投屏的 USB ADB 设备".to_string();
             return;
         };
         state.busy = true;
         state.status = "正在启动投屏…".to_string();
-        let device_id = device.id.clone();
         let d_tx = d_tx.0.clone();
         let ws_tx = ws_tx.0.clone();
         let tx = channel.tx.clone();
