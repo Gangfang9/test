@@ -175,7 +175,7 @@ fn setup_ui(
             Text::new("JX手游助手"),
             TextLayout::no_wrap(),
             TextFont {
-                font: ui_font.clone(),
+                font: ui_font.clone().into(),
                 font_size: FontSize::Px(14.),
                 ..default()
             },
@@ -515,16 +515,16 @@ fn spawn_tooltip(parent: &mut ChildSpawnerCommands, font: Handle<Font>, label: &
             padding: UiRect::axes(Val::Px(8.), Val::Px(4.)),
             border_radius: BorderRadius::all(Val::Px(4.)),
             display: Display::None,
-            z_index: ZIndex(100),
             ..default()
         },
         BackgroundColor(Color::srgba(0.04, 0.04, 0.045, 0.98)),
+        ZIndex(100),
         TooltipText,
     ))
     .with_child((
         Text::new(label),
         TextFont {
-            font,
+            font: font.into(),
             font_size: FontSize::Px(12.),
             ..default()
         },

@@ -474,8 +474,11 @@ fn spawn_mapping_page(parent: &mut ChildSpawnerCommands, font: Handle<Font>) {
                     .flat_map(|entries| entries.flatten())
                     .filter_map(|entry| {
                         let path = entry.path();
-                        (path.extension().and_then(|ext| ext.to_str()) == Some("json"))
-                            .then(|| path.file_name()?.to_string_lossy().into_owned())
+                        if path.extension().and_then(|ext| ext.to_str()) == Some("json") {
+                            path.file_name().map(|name| name.to_string_lossy().into_owned())
+                        } else {
+                            None
+                        }
                     })
                     .collect();
                 files.sort();
