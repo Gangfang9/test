@@ -45,7 +45,7 @@ export default function Sider() {
             textOverflow: "ellipsis",
           }}
         >
-          <span className="color-text font-bold text-4">LE KeyMapper</span>
+          <span className="color-text font-bold text-4">JX手游助手</span>
         </div>
       </Flex>
       <Menu

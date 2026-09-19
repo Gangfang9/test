@@ -130,12 +130,12 @@ fn main() {
     }
 
     if existing_instance(&local_config) {
-        eprintln!("LE KeyMapper is already running.");
+        eprintln!("JX手游助手 is already running.");
         return;
     }
 
     let Some((controller_port, web_port)) = select_available_server_ports(&local_config) else {
-        eprintln!("Unable to find available local ports for LE KeyMapper.");
+        eprintln!("Unable to find available local ports for JX手游助手.");
         return;
     };
     if controller_port != local_config.controller_port || web_port != local_config.web_port {
@@ -161,7 +161,7 @@ fn main() {
             })
             .set(WindowPlugin {
                 primary_window: Some(Window {
-                    title: "LE KeyMapper MVP".into(),
+                    title: "JX手游助手".into(),
                     has_shadow: false,
                     transparent: true, // for windows: https://github.com/bevyengine/bevy/issues/7544
                     decorations: false,
@@ -210,7 +210,7 @@ fn macos_menu(executor: Res<bevy::ecs::schedule::MainThreadExecutor>) {
         .0
         .spawn(async move {
             let menu = Menu::new();
-            let submenu = Submenu::new("scrcpy-mask", true);
+            let submenu = Submenu::new("JX手游助手", true);
             menu.append(&submenu).unwrap();
             menu.init_for_nsapp();
         })

@@ -54,8 +54,12 @@ struct CloseButton;
 struct PushpinButton;
 
 #[derive(Component)]
+struct TooltipText;
+
+#[derive(Component)]
 pub struct DeviceButton(pub DeviceAction);
 
+#[derive(Clone, Copy)]
 pub enum DeviceAction {
     Back,
     Home,
@@ -91,6 +95,7 @@ impl Plugin for BasicPlugin {
                     sync_titlebar_visibility,
                     sync_titlebar_title_visibility,
                     sync_pushpin_style,
+                    sync_tooltips,
                 ),
             );
     }
@@ -117,7 +122,7 @@ fn setup_ui(
 
     commands.spawn(Camera2d::default());
 
-    let titlebar_bg = Color::srgba(0.05, 0.05, 0.05, 0.85);
+    let titlebar_bg = Color::srgba(0.12, 0.13, 0.15, 0.98);
     let border_color = Color::srgba_u8(183, 42, 32, 255);
     let video_material = create_initial_yuv_material(&mut images, &mut yuv_materials);
 
@@ -132,6 +137,7 @@ fn setup_ui(
     let back_icon: Handle<Image> = asset_server.load("icons/enter.png");
     let home_icon: Handle<Image> = asset_server.load("icons/border.png");
     let menu_icon: Handle<Image> = asset_server.load("icons/menu.png");
+    let ui_font: Handle<Font> = asset_server.load("fonts/NotoSansSC-Regular.otf");
 
     let initial_pin_bg = if config.always_on_top { PIN_ACTIVE_BG } else { NORMAL_BG };
 
@@ -166,9 +172,10 @@ fn setup_ui(
     commands.entity(titlebar_entity).with_children(|titlebar| {
         // Windows-style title: application name on the left.
         titlebar.spawn((
-            Text::new("scrcpy-mask"),
+            Text::new("JX手游助手"),
             TextLayout::no_wrap(),
             TextFont {
+                font: ui_font.clone(),
                 font_size: FontSize::Px(14.),
                 ..default()
             },
@@ -200,13 +207,15 @@ fn setup_ui(
                     let mut button = right.spawn((
                         Button,
                         Node {
-                            width: Val::Px(36.),
+                            width: Val::Px(40.),
                             height: Val::Px(TITLEBAR_HEIGHT),
+                            border: UiRect::all(Val::Px(1.)),
                             justify_content: JustifyContent::Center,
                             align_items: AlignItems::Center,
                             ..default()
                         },
                         BackgroundColor(if marker == 0 { initial_pin_bg } else { NORMAL_BG }),
+                        BorderColor::all(Color::srgba(0.42, 0.44, 0.48, 0.9)),
                     ));
                     match marker {
                         0 => { button.insert(PushpinButton); }
@@ -216,12 +225,21 @@ fn setup_ui(
                     }
                     button.with_child((
                         Node {
-                            width: Val::Px(12.),
-                            height: Val::Px(12.),
+                            width: Val::Px(15.),
+                            height: Val::Px(15.),
                             ..default()
                         },
                         ImageNode::new(icon),
                     ));
+                    let hint = match marker {
+                        0 => "置顶",
+                        1 => "最小化",
+                        2 => "最大化",
+                        _ => "关闭",
+                    };
+                    button.with_children(|button| {
+                        spawn_tooltip(button, ui_font.clone(), hint);
+                    });
                 }
             });
     });
@@ -241,7 +259,7 @@ fn setup_ui(
     let toolbar_entity = commands
         .spawn((
             Node {
-                width: Val::Px(36.),
+                width: Val::Px(42.),
                 height: Val::Percent(100.),
                 flex_direction: FlexDirection::Column,
                 align_items: AlignItems::Center,
@@ -276,23 +294,37 @@ fn setup_ui(
                 .spawn((
                     Button,
                     Node {
-                        width: Val::Px(28.),
-                        height: Val::Px(28.),
+                        width: Val::Px(34.),
+                        height: Val::Px(32.),
+                        border: UiRect::all(Val::Px(1.)),
                         justify_content: JustifyContent::Center,
                         align_items: AlignItems::Center,
                         ..default()
                     },
                     BackgroundColor(NORMAL_BG),
+                    BorderColor::all(Color::srgba(0.42, 0.44, 0.48, 0.9)),
                     DeviceButton(action),
                 ))
                 .with_child((
                     Node {
-                        width: Val::Px(16.),
-                        height: Val::Px(16.),
+                        width: Val::Px(18.),
+                        height: Val::Px(18.),
                         ..default()
                     },
                     ImageNode::new(icon),
-                ));
+                ))
+                .with_children(|button| {
+                    let hint = match action {
+                        DeviceAction::ScreenOff => "息屏",
+                        DeviceAction::ScreenOn => "亮屏",
+                        DeviceAction::VolumeDown => "音量-",
+                        DeviceAction::VolumeUp => "音量+",
+                        DeviceAction::Back => "返回",
+                        DeviceAction::Home => "主页",
+                        DeviceAction::AppSwitch => "多任务",
+                    };
+                    spawn_tooltip(button, ui_font.clone(), hint);
+                });
         }
     });
 
@@ -473,6 +505,33 @@ fn setup_ui(
     });
 }
 
+fn spawn_tooltip(parent: &mut ChildSpawnerCommands, font: Handle<Font>, label: &str) {
+    parent.spawn((
+        Node {
+            position_type: PositionType::Absolute,
+            left: Val::Px(34.),
+            top: Val::Px(0.),
+            min_width: Val::Px(54.),
+            padding: UiRect::axes(Val::Px(8.), Val::Px(4.)),
+            border_radius: BorderRadius::all(Val::Px(4.)),
+            display: Display::None,
+            z_index: ZIndex(100),
+            ..default()
+        },
+        BackgroundColor(Color::srgba(0.04, 0.04, 0.045, 0.98)),
+        TooltipText,
+    ))
+    .with_child((
+        Text::new(label),
+        TextFont {
+            font,
+            font_size: FontSize::Px(12.),
+            ..default()
+        },
+        TextColor(Color::WHITE),
+    ));
+}
+
 fn handle_titlebar_drag(
     mut window: Single<&mut Window>,
     interaction_query: Query<&Interaction, (With<TitlebarMarker>, Changed<Interaction>)>,
@@ -557,8 +616,8 @@ fn handle_device_buttons(
     }
 }
 
-const NORMAL_BG: Color = Color::srgba(0.25, 0.25, 0.25, 0.6);
-const HOVERED_BG: Color = Color::srgba(0.38, 0.38, 0.38, 0.7);
+const NORMAL_BG: Color = Color::srgba(0.28, 0.30, 0.34, 0.96);
+const HOVERED_BG: Color = Color::srgba(0.46, 0.48, 0.53, 0.98);
 const PRESSED_BG: Color = Color::srgba(0.15, 0.15, 0.15, 0.85);
 
 const CLOSE_HOVER_BG: Color = Color::srgba(0.77, 0.12, 0.12, 0.95);
@@ -631,6 +690,32 @@ fn button_interaction(
                 Interaction::None => NORMAL_BG,
             }
             .into();
+        }
+    }
+}
+
+fn sync_tooltips(
+    buttons: Query<
+        (&Interaction, &Children),
+        Or<(
+            With<MinimizeButton>,
+            With<MaximizeButton>,
+            With<PushpinButton>,
+            With<CloseButton>,
+            With<DeviceButton>,
+        )>,
+    >,
+    mut tooltip_nodes: Query<&mut Node, With<TooltipText>>,
+) {
+    for (interaction, children) in buttons.iter() {
+        for child in children.iter() {
+            if let Ok(mut node) = tooltip_nodes.get_mut(child) {
+                node.display = if *interaction == Interaction::Hovered {
+                    Display::Flex
+                } else {
+                    Display::None
+                };
+            }
         }
     }
 }

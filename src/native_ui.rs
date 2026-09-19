@@ -1,11 +1,14 @@
 use bevy::prelude::*;
+use bevy::window::WindowLevel;
 use crossbeam_channel::{Receiver, Sender, unbounded};
+use std::fs;
 
 use crate::{
+    config::LocalConfig,
     mask::ui::basic::{ProjectionBodyMarker, TITLEBAR_HEIGHT},
     scrcpy::adb::Device,
     tokio_tasks::TokioTasksRuntime,
-    utils::{ChannelSenderD, ChannelSenderWS},
+    utils::{ChannelSenderD, ChannelSenderWS, relate_to_data_path},
     web::device::{list_usb_devices, restart_adb_and_list_usb_devices, start_usb_device},
 };
 
@@ -18,6 +21,41 @@ const MUTED: Color = Color::srgb(0.62, 0.64, 0.68);
 const ACCENT: Color = Color::srgb(0.78, 0.12, 0.09);
 const ACCENT_HOVER: Color = Color::srgb(0.92, 0.18, 0.13);
 const INFO: Color = Color::srgb(0.045, 0.11, 0.22);
+
+#[derive(Resource, Default, Clone, Copy, PartialEq, Eq)]
+enum NativePage {
+    #[default]
+    Device,
+    Mapping,
+    Settings,
+}
+
+#[derive(Component)]
+struct NativeDevicePage;
+
+#[derive(Component)]
+struct NativeMappingPage;
+
+#[derive(Component)]
+struct NativeSettingsPage;
+
+#[derive(Component)]
+struct NativeNavButton(NativePage);
+
+#[derive(Component)]
+struct MappingFileButton(String);
+
+#[derive(Component)]
+struct NativePageStatus;
+
+#[derive(Component)]
+struct ToggleAlwaysOnTopButton;
+
+#[derive(Component)]
+struct ToggleTitlebarButton;
+
+#[derive(Component)]
+struct CycleOrientationButton;
 
 #[derive(Component)]
 pub struct NativeDashboardRoot;
@@ -70,15 +108,18 @@ pub struct NativeUiPlugin;
 impl Plugin for NativeUiPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<NativeDeviceState>()
+            .init_resource::<NativePage>()
             .init_resource::<NativeUiChannel>()
             .add_systems(PostStartup, setup_native_dashboard)
             .add_systems(
                 Update,
                 (
                     handle_native_buttons,
+                    handle_native_navigation,
                     receive_native_results,
                     sync_native_dashboard,
                     native_button_style,
+                    native_navigation_style,
                 ),
             );
     }
@@ -101,7 +142,7 @@ fn setup_native_dashboard(
     mut window: Single<&mut Window>,
     channel: Res<NativeUiChannel>,
 ) {
-    window.title = "LE KeyMapper".to_string();
+    window.title = "JX手游助手".to_string();
     window.resolution.set(1280., 760. + TITLEBAR_HEIGHT);
     window.visible = true;
     window.focused = true;
@@ -145,20 +186,23 @@ fn setup_native_dashboard(
                     BorderColor::all(BORDER),
                 ))
                 .with_children(|sidebar| {
-                    spawn_nav_item(sidebar, font.clone(), "▣   设备", true);
-                    spawn_nav_item(sidebar, font.clone(), "⌨   编辑映射", false);
-                    spawn_nav_item(sidebar, font.clone(), "⚙   设置", false);
+                    spawn_nav_item(sidebar, font.clone(), "▣   设备", true, NativePage::Device);
+                    spawn_nav_item(sidebar, font.clone(), "⌨   编辑映射", false, NativePage::Mapping);
+                    spawn_nav_item(sidebar, font.clone(), "⚙   设置", false, NativePage::Settings);
                 });
 
             layout
-                .spawn(Node {
-                    flex_grow: 1.,
-                    height: Val::Percent(100.),
-                    padding: UiRect::all(Val::Px(24.)),
-                    flex_direction: FlexDirection::Row,
-                    column_gap: Val::Px(20.),
-                    ..default()
-                })
+                    .spawn((
+                        Node {
+                            flex_grow: 1.,
+                            height: Val::Percent(100.),
+                            padding: UiRect::all(Val::Px(24.)),
+                            flex_direction: FlexDirection::Row,
+                            column_gap: Val::Px(20.),
+                            ..default()
+                        },
+                        NativeDevicePage,
+                    ))
                 .with_children(|content| {
                     content
                         .spawn(Node {
@@ -325,6 +369,9 @@ fn setup_native_dashboard(
                             ));
                         });
                 });
+
+            spawn_mapping_page(layout, font.clone());
+            spawn_settings_page(layout, font.clone());
         });
 
         root.spawn((
@@ -352,9 +399,16 @@ fn setup_native_dashboard(
     });
 }
 
-fn spawn_nav_item(parent: &mut ChildSpawnerCommands, font: Handle<Font>, label: &str, active: bool) {
+fn spawn_nav_item(
+    parent: &mut ChildSpawnerCommands,
+    font: Handle<Font>,
+    label: &str,
+    active: bool,
+    page: NativePage,
+) {
     parent
         .spawn((
+            Button,
             Node {
                 width: Val::Percent(100.),
                 height: Val::Px(48.),
@@ -368,11 +422,163 @@ fn spawn_nav_item(parent: &mut ChildSpawnerCommands, font: Handle<Font>, label: 
             } else {
                 Color::NONE
             }),
+            NativeNavButton(page),
         ))
         .with_child((
             Text::new(label),
             ui_text(font, 16., if active { TEXT } else { MUTED }),
         ));
+}
+
+fn spawn_mapping_page(parent: &mut ChildSpawnerCommands, font: Handle<Font>) {
+    parent
+        .spawn((
+            Node {
+                width: Val::Percent(100.),
+                height: Val::Percent(100.),
+                padding: UiRect::all(Val::Px(24.)),
+                flex_direction: FlexDirection::Column,
+                row_gap: Val::Px(14.),
+                display: Display::None,
+                ..default()
+            },
+            NativeMappingPage,
+        ))
+        .with_children(|page| {
+            page.spawn((Text::new("编辑映射"), ui_text(font.clone(), 30., TEXT)));
+            page.spawn((
+                Text::new("选择映射配置后，可在投屏窗口中直接使用对应按键。"),
+                ui_text(font.clone(), 14., MUTED),
+            ));
+            page.spawn((
+                Node {
+                    width: Val::Percent(100.),
+                    flex_grow: 1.,
+                    padding: UiRect::all(Val::Px(16.)),
+                    flex_direction: FlexDirection::Column,
+                    row_gap: Val::Px(8.),
+                    border: UiRect::all(Val::Px(1.)),
+                    border_radius: BorderRadius::all(Val::Px(6.)),
+                    ..default()
+                },
+                BackgroundColor(PANEL),
+                BorderColor::all(BORDER),
+            ))
+            .with_children(|card| {
+                card.spawn((Text::new("映射配置"), ui_text(font.clone(), 19., TEXT)));
+                let active = LocalConfig::get().active_mapping_file;
+                let mapping_dir = relate_to_data_path(["mapping"]);
+                let mut files: Vec<String> = fs::read_dir(mapping_dir)
+                    .ok()
+                    .into_iter()
+                    .flat_map(|entries| entries.flatten())
+                    .filter_map(|entry| {
+                        let path = entry.path();
+                        (path.extension().and_then(|ext| ext.to_str()) == Some("json"))
+                            .then(|| path.file_name()?.to_string_lossy().into_owned())
+                    })
+                    .collect();
+                files.sort();
+                if files.is_empty() {
+                    card.spawn((Text::new("未找到映射配置文件"), ui_text(font.clone(), 14., MUTED)));
+                } else {
+                    for file in files {
+                        let is_active = file == active;
+                        card.spawn((
+                            Button,
+                            Node {
+                                width: Val::Percent(100.),
+                                min_height: Val::Px(42.),
+                                padding: UiRect::horizontal(Val::Px(14.)),
+                                align_items: AlignItems::Center,
+                                border: UiRect::all(Val::Px(1.)),
+                                border_radius: BorderRadius::all(Val::Px(5.)),
+                                ..default()
+                            },
+                            BackgroundColor(if is_active { ACCENT } else { PANEL_ALT }),
+                            BorderColor::all(if is_active { ACCENT } else { BORDER }),
+                            MappingFileButton(file.clone()),
+                        ))
+                        .with_child((Text::new(if is_active { format!("✓  {file}") } else { file }), ui_text(font.clone(), 14., TEXT)));
+                    }
+                }
+                card.spawn((
+                    Text::new("提示：映射文件可在 data/mapping 目录中维护；选择后下次投屏生效。"),
+                    ui_text(font.clone(), 13., MUTED),
+                ));
+            });
+            page.spawn((Text::new("点击左侧“设备”返回设备控制。"), ui_text(font, 13., MUTED)));
+        });
+}
+
+fn spawn_settings_page(parent: &mut ChildSpawnerCommands, font: Handle<Font>) {
+    parent
+        .spawn((
+            Node {
+                width: Val::Percent(100.),
+                height: Val::Percent(100.),
+                padding: UiRect::all(Val::Px(24.)),
+                flex_direction: FlexDirection::Column,
+                row_gap: Val::Px(14.),
+                display: Display::None,
+                ..default()
+            },
+            NativeSettingsPage,
+        ))
+        .with_children(|page| {
+            page.spawn((Text::new("设置"), ui_text(font.clone(), 30., TEXT)));
+            page.spawn((Text::new("投屏和窗口行为"), ui_text(font.clone(), 16., MUTED)));
+            page.spawn((
+                Node {
+                    width: Val::Percent(100.),
+                    padding: UiRect::all(Val::Px(16.)),
+                    flex_direction: FlexDirection::Column,
+                    row_gap: Val::Px(10.),
+                    border: UiRect::all(Val::Px(1.)),
+                    border_radius: BorderRadius::all(Val::Px(6.)),
+                    ..default()
+                },
+                BackgroundColor(PANEL),
+                BorderColor::all(BORDER),
+            ))
+            .with_children(|card| {
+                spawn_setting_button(card, font.clone(), "切换置顶", ToggleAlwaysOnTopButton);
+                spawn_setting_button(card, font.clone(), "切换标题栏", ToggleTitlebarButton);
+                spawn_setting_button(card, font.clone(), "旋转投屏画面", CycleOrientationButton);
+                card.spawn((Text::new("当前设置"), ui_text(font.clone(), 16., TEXT)));
+                let config = LocalConfig::get();
+                card.spawn((
+                    Text::new(format!(
+                        "置顶：{}    标题栏：{}    投屏方向：{}°    当前映射：{}",
+                        if config.always_on_top { "开" } else { "关" },
+                        if config.titlebar_visible { "开" } else { "关" },
+                        if config.capture_orientation < 0 { "跟随设备".to_string() } else { config.capture_orientation.to_string() },
+                        config.active_mapping_file,
+                    )),
+                    ui_text(font.clone(), 14., MUTED),
+                    NativePageStatus,
+                ));
+            });
+        });
+}
+
+fn spawn_setting_button<M: Component>(parent: &mut ChildSpawnerCommands, font: Handle<Font>, label: &str, marker: M) {
+    parent.spawn((
+        Button,
+        Node {
+            width: Val::Px(190.),
+            height: Val::Px(38.),
+            padding: UiRect::horizontal(Val::Px(14.)),
+            align_items: AlignItems::Center,
+            justify_content: JustifyContent::Center,
+            border: UiRect::all(Val::Px(1.)),
+            border_radius: BorderRadius::all(Val::Px(5.)),
+            ..default()
+        },
+        BackgroundColor(PANEL_ALT),
+        BorderColor::all(BORDER),
+        marker,
+    )).with_child((Text::new(label), ui_text(font, 14., TEXT)));
 }
 
 fn spawn_action_button<M: Component>(
@@ -458,6 +664,68 @@ fn handle_native_buttons(
             let result = start_usb_device(&device_id, &d_tx, &ws_tx).await;
             let _ = tx.send(NativeUiResult::Projection(result));
         });
+    }
+}
+
+fn handle_native_navigation(
+    nav: Query<(&Interaction, &NativeNavButton), Changed<Interaction>>,
+    mapping: Query<(&Interaction, &MappingFileButton), Changed<Interaction>>,
+    always_on_top: Query<&Interaction, (With<ToggleAlwaysOnTopButton>, Changed<Interaction>)>,
+    titlebar: Query<&Interaction, (With<ToggleTitlebarButton>, Changed<Interaction>)>,
+    orientation: Query<&Interaction, (With<CycleOrientationButton>, Changed<Interaction>)>,
+    mut page: ResMut<NativePage>,
+    mut window: Single<&mut Window>,
+    mut device_page: Query<&mut Node, With<NativeDevicePage>>,
+    mut mapping_page: Query<&mut Node, (With<NativeMappingPage>, Without<NativeDevicePage>)>,
+    mut settings_page: Query<&mut Node, (With<NativeSettingsPage>, Without<NativeDevicePage>)>,
+    mut status: Query<&mut Text, With<NativePageStatus>>,
+) {
+    if let Some((_, button)) = nav.iter().find(|(interaction, _)| **interaction == Interaction::Pressed) {
+        *page = button.0;
+    }
+    if let Some((_, file)) = mapping.iter().find(|(interaction, _)| **interaction == Interaction::Pressed) {
+        LocalConfig::set_active_mapping_file(file.0.clone());
+        for mut text in status.iter_mut() {
+            text.0 = format!("已选择映射：{}（下次投屏生效）", file.0);
+        }
+    }
+    if always_on_top.iter().any(|interaction| *interaction == Interaction::Pressed) {
+        let value = !LocalConfig::get().always_on_top;
+        LocalConfig::set_always_on_top(value);
+        window.window_level = if value { WindowLevel::AlwaysOnTop } else { WindowLevel::Normal };
+        for mut text in status.iter_mut() {
+            text.0 = format!("置顶已{}", if value { "开启" } else { "关闭" });
+        }
+    }
+    if titlebar.iter().any(|interaction| *interaction == Interaction::Pressed) {
+        let value = !LocalConfig::get().titlebar_visible;
+        LocalConfig::set_titlebar_visible(value);
+        for mut text in status.iter_mut() {
+            text.0 = format!("标题栏已{}（下次打开投屏窗口生效）", if value { "显示" } else { "隐藏" });
+        }
+    }
+    if orientation.iter().any(|interaction| *interaction == Interaction::Pressed) {
+        let next = match LocalConfig::get().capture_orientation {
+            -1 => 0,
+            0 => 90,
+            90 => 180,
+            180 => 270,
+            _ => -1,
+        };
+        LocalConfig::set_capture_orientation(next);
+        for mut text in status.iter_mut() {
+            text.0 = if next < 0 { "投屏方向：跟随设备".to_string() } else { format!("投屏方向：{next}°") };
+        }
+    }
+
+    for mut node in device_page.iter_mut() {
+        node.display = if *page == NativePage::Device { Display::Flex } else { Display::None };
+    }
+    for mut node in mapping_page.iter_mut() {
+        node.display = if *page == NativePage::Mapping { Display::Flex } else { Display::None };
+    }
+    for mut node in settings_page.iter_mut() {
+        node.display = if *page == NativePage::Settings { Display::Flex } else { Display::None };
     }
 }
 
@@ -555,5 +823,38 @@ fn native_button_style(
             Interaction::None => ACCENT,
         }
         .into();
+    }
+}
+
+fn native_navigation_style(
+    page: Res<NativePage>,
+    mut nav: Query<(&NativeNavButton, &Interaction, &mut BackgroundColor)>,
+    mut controls: Query<
+        (&Interaction, &mut BackgroundColor),
+        Or<(
+            With<MappingFileButton>,
+            With<ToggleAlwaysOnTopButton>,
+            With<ToggleTitlebarButton>,
+            With<CycleOrientationButton>,
+        )>,
+    >,
+) {
+    for (button, interaction, mut background) in nav.iter_mut() {
+        *background = if button.0 == *page {
+            ACCENT.into()
+        } else {
+            match *interaction {
+                Interaction::Hovered => PANEL_ALT.into(),
+                Interaction::Pressed => Color::srgb(0.2, 0.05, 0.04).into(),
+                Interaction::None => Color::NONE.into(),
+            }
+        };
+    }
+    for (interaction, mut background) in controls.iter_mut() {
+        *background = match *interaction {
+            Interaction::Hovered => ACCENT_HOVER.into(),
+            Interaction::Pressed => Color::srgb(0.42, 0.06, 0.045).into(),
+            Interaction::None => PANEL_ALT.into(),
+        };
     }
 }
