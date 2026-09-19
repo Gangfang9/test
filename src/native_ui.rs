@@ -679,8 +679,22 @@ fn handle_native_navigation(
     mut page: ResMut<NativePage>,
     mut window: Single<&mut Window>,
     mut device_page: Query<&mut Node, With<NativeDevicePage>>,
-    mut mapping_page: Query<&mut Node, (With<NativeMappingPage>, Without<NativeDevicePage>)>,
-    mut settings_page: Query<&mut Node, (With<NativeSettingsPage>, Without<NativeDevicePage>)>,
+    mut mapping_page: Query<
+        &mut Node,
+        (
+            With<NativeMappingPage>,
+            Without<NativeDevicePage>,
+            Without<NativeSettingsPage>,
+        ),
+    >,
+    mut settings_page: Query<
+        &mut Node,
+        (
+            With<NativeSettingsPage>,
+            Without<NativeDevicePage>,
+            Without<NativeMappingPage>,
+        ),
+    >,
     mut status: Query<&mut Text, With<NativePageStatus>>,
 ) {
     if let Some((_, button)) = nav.iter().find(|(interaction, _)| **interaction == Interaction::Pressed) {
