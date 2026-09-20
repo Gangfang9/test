@@ -4,7 +4,7 @@ use bevy::{
     math::CompassOctant,
     prelude::IntoScheduleConfigs,
     prelude::*,
-    window::{CursorIcon, SystemCursorIcon, WindowLevel},
+    window::{CursorIcon, PrimaryWindow, SystemCursorIcon, WindowLevel},
     winit::{UpdateMode, WinitSettings},
 };
 use bevy_ui_render::prelude::MaterialNode;

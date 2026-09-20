@@ -6,7 +6,7 @@ use std::{
 use bevy::{
     input::mouse::AccumulatedMouseMotion,
     prelude::*,
-    window::{CursorGrabMode, CursorOptions},
+    window::{CursorGrabMode, CursorOptions, PrimaryWindow},
 };
 
 use crate::{

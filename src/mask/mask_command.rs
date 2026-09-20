@@ -1,4 +1,4 @@
-use bevy::{ecs::system::SystemParam, prelude::*, window::WindowLevel};
+use bevy::{ecs::system::SystemParam, prelude::*, window::{PrimaryWindow, WindowLevel}};
 use bevy_ineffable::prelude::IneffableCommands;
 use rust_i18n::t;
 

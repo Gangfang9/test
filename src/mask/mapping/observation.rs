@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use bevy::{
     ecs::{
+        query::With,
         resource::Resource,
         system::{Commands, Local, Res, ResMut, Single},
     },
