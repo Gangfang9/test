@@ -138,6 +138,7 @@ pub fn handle_mask_command(
                     next_mapping_state.set(MappingState::Normal);
                     log::info!("[Mapping] {}", t!("mask.enterNormalMappingMode"));
                     window.visible = true;
+                    window.set_minimized(false);
                     window.focused = false;
                     native_ui.pending_focus.frames_remaining = 2;
                     for mut node in native_ui.projection.iter_mut() {
@@ -229,6 +230,15 @@ pub fn handle_mask_command(
                 }
             }
             MaskCommand::ToggleTitlebar => {
+                if cfg!(target_os = "windows") {
+                    // The projection window uses the Windows-native title bar;
+                    // never re-enable the retired in-content imitation.
+                    titlebar_state.visible = false;
+                    oneshot_tx
+                        .send(Ok("[Mask] Windows native titlebar is always enabled".to_string()))
+                        .unwrap();
+                    continue;
+                }
                 let new_visible = !titlebar_state.visible;
                 LocalConfig::set_titlebar_visible(new_visible);
                 titlebar_state.visible = new_visible;

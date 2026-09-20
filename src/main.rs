@@ -165,14 +165,17 @@ fn main() {
             })
             .set(WindowPlugin {
                 primary_window: Some(Window {
-                    title: "JX手游助手".into(),
-                    has_shadow: false,
-                    transparent: true, // for windows: https://github.com/bevyengine/bevy/issues/7544
-                    decorations: false,
+                    title: "JX手游助手 - 投屏".into(),
+                    has_shadow: true,
+                    transparent: false,
+                    // The projection surface is a separate, ordinary Windows
+                    // window.  Keep the OS title bar and system window buttons.
+                    decorations: true,
                     present_mode: PresentMode::AutoVsync,
                     resizable: true,
-                    // The desktop shell makes the window visible only after
-                    // WebView2 is ready, avoiding a flash of the retired UI.
+                    // The projection window is revealed only after scrcpy has
+                    // established the main control channel. The management
+                    // window remains visible throughout the projection.
                     visible: !cfg!(target_os = "windows"),
                     focused: !cfg!(target_os = "windows"),
                     window_level: if local_config.always_on_top {
@@ -184,6 +187,10 @@ fn main() {
                     composite_alpha_mode: bevy::window::CompositeAlphaMode::PostMultiplied,
                     ..default()
                 }),
+                // Window close requests are routed explicitly: closing the
+                // projection stops projection only, while closing the
+                // management window exits the application.
+                close_when_requested: false,
                 ..default()
             }),
     )

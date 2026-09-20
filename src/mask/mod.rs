@@ -14,7 +14,9 @@ use bevy::{
     math::Vec2,
     prelude::{ButtonInput, Entity, IntoScheduleConfigs, MouseButton, Resource, SystemSet, With},
     time::{Time, Timer, TimerMode},
-    window::{PrimaryWindow, Window, WindowMoved, WindowPosition, WindowResized},
+    window::{
+        PrimaryWindow, Window, WindowCloseRequested, WindowMoved, WindowPosition, WindowResized,
+    },
 };
 use bevy_ui_render::prelude::UiMaterialPlugin;
 
@@ -29,7 +31,8 @@ use crate::{
         ui::basic::TITLEBAR_HEIGHT,
         video::{YuvVideoMaterial, handle_video_msg},
     },
-    utils::{ChannelSenderWS, DeviceOrientation, share::ControlledDevice},
+    scrcpy::controller::ControllerCommand,
+    utils::{ChannelSenderD, ChannelSenderWS, DeviceOrientation, share::ControlledDevice},
     web::ws::WebSocketNotification,
 };
 
@@ -58,6 +61,7 @@ impl Plugin for MaskPlugins {
                     sync_mask_position,
                     handle_mask_command,
                     apply_pending_window_focus.after(handle_mask_command),
+                    handle_projection_window_close,
                     handle_video_msg,
                 ),
             );
@@ -66,7 +70,8 @@ impl Plugin for MaskPlugins {
 
 fn init_mask_size(mut commands: Commands, window: Single<&Window, With<PrimaryWindow>>) {
     let config = LocalConfig::get();
-    let mask_h = if config.titlebar_visible {
+    let legacy_titlebar_visible = !cfg!(target_os = "windows") && config.titlebar_visible;
+    let mask_h = if legacy_titlebar_visible {
         (window.size().y - TITLEBAR_HEIGHT).max(0.0)
     } else {
         window.size().y
@@ -77,8 +82,38 @@ fn init_mask_size(mut commands: Commands, window: Single<&Window, With<PrimaryWi
 fn init_titlebar_state(mut commands: Commands) {
     let config = LocalConfig::get();
     commands.insert_resource(TitlebarState {
-        visible: config.titlebar_visible,
+        // Windows supplies the projection window's real title bar. Keeping
+        // the legacy in-content title bar would create a confusing duplicate.
+        visible: if cfg!(target_os = "windows") {
+            false
+        } else {
+            config.titlebar_visible
+        },
     });
+}
+
+fn handle_projection_window_close(
+    mut close_events: MessageReader<WindowCloseRequested>,
+    projection_window: Single<(Entity, &mut Window), With<PrimaryWindow>>,
+    d_tx: Res<ChannelSenderD>,
+) {
+    let (projection_entity, mut window) = projection_window.into_inner();
+    if !close_events.read().any(|event| event.window == projection_entity) {
+        return;
+    }
+
+    // Hide immediately so the native close button feels responsive. The
+    // connection shutdown subsequently performs the full projection cleanup.
+    window.visible = false;
+    window.focused = false;
+    if let Some(device) = ControlledDevice::get_main_device_blocking() {
+        if let Err(error) = d_tx
+            .0
+            .send(ControllerCommand::ShutdownMain(device.scid.clone()))
+        {
+            log::error!("[Mask] failed to stop projection after window close: {error}");
+        }
+    }
 }
 
 const DEBOUNCE_MS: u64 = 200;

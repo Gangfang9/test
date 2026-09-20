@@ -110,7 +110,12 @@ fn setup_ui(
 ) {
     let (window_entity, mut window) = window.into_inner();
     let config = LocalConfig::get();
-    let win_h = if config.titlebar_visible {
+    let legacy_titlebar_visible = if cfg!(target_os = "windows") {
+        false
+    } else {
+        config.titlebar_visible
+    };
+    let win_h = if legacy_titlebar_visible {
         600. + TITLEBAR_HEIGHT
     } else {
         600.
@@ -158,7 +163,11 @@ fn setup_ui(
                 width: Val::Percent(100.),
                 height: Val::Px(TITLEBAR_HEIGHT),
                 padding: UiRect::px(8., 8., 0., 0.),
-                display: Display::Flex,
+                display: if legacy_titlebar_visible {
+                    Display::Flex
+                } else {
+                    Display::None
+                },
                 flex_direction: FlexDirection::Row,
                 align_items: AlignItems::Center,
                 ..default()
