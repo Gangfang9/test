@@ -69,11 +69,12 @@ fn spawn_management_window(
         .iter()
         .next()
         .map(|monitor| {
-            let logical_width = monitor.physical_width as f64 / monitor.scale_factor;
-            let logical_height = monitor.physical_height as f64 / monitor.scale_factor;
-            ((logical_width * 0.6) as f32, (logical_height * 0.6) as f32)
+            (
+                (monitor.physical_width as f32 * 0.6).round() as u32,
+                (monitor.physical_height as f32 * 0.6).round() as u32,
+            )
         })
-        .unwrap_or((1152., 648.));
+        .unwrap_or((1152, 648));
     commands.spawn((
         Window {
             title: "JX手游助手".into(),
