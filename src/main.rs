@@ -16,7 +16,6 @@ use scrcpy_mask::{
     config::LocalConfig,
     is_available_language,
     mask::{MaskPlugins, mask_command::MaskCommand},
-    native_ui::NativeUiPlugin,
     scrcpy::{
         control_msg::ScrcpyControlMsg,
         controller::{self, ControllerCommand},
@@ -170,8 +169,10 @@ fn main() {
                     decorations: false,
                     present_mode: PresentMode::AutoVsync,
                     resizable: true,
-                    visible: true,
-                    focused: true,
+                    // The desktop shell makes the window visible only after
+                    // WebView2 is ready, avoiding a flash of the retired UI.
+                    visible: !cfg!(target_os = "windows"),
+                    focused: !cfg!(target_os = "windows"),
                     window_level: if local_config.always_on_top {
                         WindowLevel::AlwaysOnTop
                     } else {
@@ -186,7 +187,6 @@ fn main() {
     )
     .add_plugins(TokioTasksPlugin::default())
     .add_plugins(MaskPlugins)
-    .add_plugins(NativeUiPlugin)
     .add_systems(Startup, start_servers);
 
     #[cfg(target_os = "windows")]

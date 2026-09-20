@@ -67,10 +67,10 @@ fn webview_bounds(window: &Window) -> (Rect, UVec2) {
 fn sync_desktop_webview(
     time: Res<Time>,
     mut state: NonSendMut<DesktopWebViewState>,
-    windows: Query<(&Window, &RawHandleWrapper), With<PrimaryWindow>>,
+    mut windows: Query<(&mut Window, &RawHandleWrapper), With<PrimaryWindow>>,
     projection: Query<&Node, With<ProjectionBodyMarker>>,
 ) {
-    let Ok((window, raw_handle)) = windows.single() else {
+    let Ok((mut window, raw_handle)) = windows.single_mut() else {
         return;
     };
 
@@ -78,7 +78,7 @@ fn sync_desktop_webview(
         .iter()
         .any(|node| node.display != Display::None);
     let should_show = !projecting;
-    let (bounds, content_size) = webview_bounds(window);
+    let (bounds, content_size) = webview_bounds(&window);
 
     if state.webview.is_none() {
         state.retry_timer.tick(time.delta());
@@ -109,6 +109,8 @@ fn sync_desktop_webview(
                 state.webview = Some(webview);
                 state.last_size = content_size;
                 state.last_visible = should_show;
+                window.visible = true;
+                window.focused = true;
                 log::info!("[DesktopUI] WebView2 management UI loaded: {url}");
             }
             Err(error) => {

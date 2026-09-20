@@ -13,7 +13,6 @@ use crate::{
         },
         ui::basic::{ProjectionBodyMarker, TITLEBAR_HEIGHT},
     },
-    native_ui::NativeDashboardRoot,
     tokio_tasks::TokioTasksRuntime,
     utils::{ChannelReceiverM, ChannelSenderCS},
 };
@@ -59,17 +58,11 @@ pub struct PendingWindowFocus {
 #[derive(SystemParam)]
 pub(crate) struct NativeWindowUi<'w, 's> {
     pending_focus: ResMut<'w, PendingWindowFocus>,
-    dashboard: Query<
-        'w,
-        's,
-        &'static mut Node,
-        (With<NativeDashboardRoot>, Without<ProjectionBodyMarker>),
-    >,
     projection: Query<
         'w,
         's,
         &'static mut Node,
-        (With<ProjectionBodyMarker>, Without<NativeDashboardRoot>),
+        With<ProjectionBodyMarker>,
     >,
 }
 
@@ -147,9 +140,6 @@ pub fn handle_mask_command(
                     window.visible = true;
                     window.focused = false;
                     native_ui.pending_focus.frames_remaining = 2;
-                    for mut node in native_ui.dashboard.iter_mut() {
-                        node.display = Display::None;
-                    }
                     for mut node in native_ui.projection.iter_mut() {
                         node.display = Display::Flex;
                     }
@@ -162,9 +152,6 @@ pub fn handle_mask_command(
                     window.focused = true;
                     native_ui.pending_focus.frames_remaining = 0;
                     window.resolution.set(1280., 760. + TITLEBAR_HEIGHT);
-                    for mut node in native_ui.dashboard.iter_mut() {
-                        node.display = Display::Flex;
-                    }
                     for mut node in native_ui.projection.iter_mut() {
                         node.display = Display::None;
                     }
