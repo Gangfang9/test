@@ -862,57 +862,63 @@ struct PostDataId {
 async fn adb_screenshot(
     Json(payload): Json<PostDataId>,
 ) -> Result<impl IntoResponse, WebServerError> {
-    let src = "/data/local/tmp/_screenshot_scrcpy_mask.png";
-
-    let mut display_id_info = Vec::new();
-    Device::shell(
-        &payload.id,
-        ["dumpsys", "SurfaceFlinger", "--display-id"],
-        &mut display_id_info,
-    )
-    .map_err(|e| WebServerError::bad_request(format!("failed get display id: {}", e)))?;
-    let text = String::from_utf8_lossy(&display_id_info);
-    let first_line = text
-        .lines()
-        .next()
-        .ok_or_else(|| WebServerError::bad_request("no display found"))?;
-    let display_id = first_line
-        .split_whitespace()
-        .nth(1)
-        .ok_or_else(|| WebServerError::bad_request("invalid display line"))?;
-
-    Device::shell_logged(&payload.id, ["screencap", "-p", "-d", display_id, src]).map_err(|e| {
-        WebServerError::bad_request(format!(
-            "{} {}: {}",
-            t!("web.device.screenshotError"),
-            payload.id,
-            e
-        ))
-    })?;
-
-    let mut image_bytes = Vec::<u8>::new();
-    Device::pull(&payload.id, src.to_string(), &mut image_bytes).map_err(|e| {
-        WebServerError::bad_request(format!(
-            "{}: {}",
-            t!("web.device.failedGetScreenshotFile"),
-            e
-        ))
-    })?;
-
-    Device::shell_logged(&payload.id, ["rm", src]).map_err(|e| {
-        WebServerError::bad_request(format!(
-            "{} {}: {}",
-            t!("web.device.failedRemoveScreenshot"),
-            payload.id,
-            e
-        ))
-    })?;
+    let image_bytes = capture_adb_screenshot(&payload.id)
+        .map_err(WebServerError::bad_request)?;
 
     let mut headers = HeaderMap::new();
     headers.insert("Content-Type", HeaderValue::from_static("image/png"));
     headers.insert("Cache-Control", HeaderValue::from_static("no-cache"));
 
     Ok((StatusCode::OK, headers, image_bytes))
+}
+
+pub fn capture_adb_screenshot(id: &str) -> Result<Vec<u8>, String> {
+    let src = "/data/local/tmp/_screenshot_scrcpy_mask.png";
+
+    let mut display_id_info = Vec::new();
+    Device::shell(
+        id,
+        ["dumpsys", "SurfaceFlinger", "--display-id"],
+        &mut display_id_info,
+    )
+    .map_err(|e| format!("failed get display id: {}", e))?;
+    let text = String::from_utf8_lossy(&display_id_info);
+    let first_line = text
+        .lines()
+        .next()
+        .ok_or_else(|| "no display found".to_string())?;
+    let display_id = first_line
+        .split_whitespace()
+        .nth(1)
+        .ok_or_else(|| "invalid display line".to_string())?;
+
+    Device::shell_logged(id, ["screencap", "-p", "-d", display_id, src]).map_err(|e| {
+        format!(
+            "{} {}: {}",
+            t!("web.device.screenshotError"),
+            id,
+            e
+        )
+    })?;
+
+    let mut image_bytes = Vec::<u8>::new();
+    Device::pull(id, src.to_string(), &mut image_bytes).map_err(|e| {
+        format!(
+            "{}: {}",
+            t!("web.device.failedGetScreenshotFile"),
+            e
+        )
+    })?;
+
+    Device::shell_logged(id, ["rm", src]).map_err(|e| {
+        format!(
+            "{} {}: {}",
+            t!("web.device.failedRemoveScreenshot"),
+            id,
+            e
+        )
+    })?;
+    Ok(image_bytes)
 }
 
 #[derive(Deserialize)]

@@ -23,7 +23,8 @@ use scrcpy_mask::{
     },
     tokio_tasks::TokioTasksPlugin,
     utils::{
-        ChannelReceiverM, ChannelReceiverV, ChannelSenderCS, ChannelSenderD, ChannelSenderWS,
+        ChannelReceiverM, ChannelReceiverV, ChannelSenderCS, ChannelSenderD, ChannelSenderM,
+        ChannelSenderWS,
         LatestVideoFrame, relate_to_data_path,
     },
     web::{self, ws::WebSocketNotification},
@@ -232,6 +233,7 @@ fn start_servers(mut commands: Commands) {
     commands.insert_resource(ChannelSenderCS(cs_tx.clone()));
     commands.insert_resource(ChannelReceiverV(v_channel.clone()));
     commands.insert_resource(ChannelReceiverM(m_rx));
+    commands.insert_resource(ChannelSenderM(m_tx.clone()));
     commands.insert_resource(ChannelSenderD(d_tx.clone()));
     commands.insert_resource(ChannelSenderWS(ws_tx.clone()));
     // Keep the complete legacy API available during the native migration, but

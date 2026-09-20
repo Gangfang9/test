@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="860" viewBox="0 0 1500 860">
+  <rect width="1500" height="860" fill="#09090b"/>
+  <rect width="1500" height="32" fill="#252830"/><text x="14" y="21" fill="#e8e8eb" font-family="Microsoft YaHei" font-size="14">JX手游助手</text>
+  <rect x="0" y="32" width="180" height="828" fill="#0e0f11"/>
+  <g font-family="Microsoft YaHei" font-size="16"><text x="25" y="85" fill="#a0a3ad">▣　设备</text><text x="25" y="140" fill="#a0a3ad">⌨　编辑映射</text><rect x="12" y="158" width="156" height="48" rx="6" fill="#c71f17"/><text x="25" y="189" fill="#fff">⚙　设置</text></g>
+  <text x="205" y="82" fill="#ededf0" font-family="Microsoft YaHei" font-size="30">设置</text>
+  <text x="205" y="110" fill="#9fa3ad" font-family="Microsoft YaHei" font-size="14">画质、帧率、编码和声音在下次投屏时生效；显示与控制设置立即生效。</text>
+  <g font-family="Microsoft YaHei">
+    <rect x="205" y="135" width="630" height="660" rx="7" fill="#17181b" stroke="#383940"/><text x="222" y="165" fill="#eee" font-size="19">投屏</text>
+    <rect x="850" y="135" width="625" height="660" rx="7" fill="#17181b" stroke="#383940"/><text x="867" y="165" fill="#eee" font-size="19">显示与控制</text>
+  </g>
+  <g font-family="Microsoft YaHei">
+    <g transform="translate(220 180)">
+      <g><rect width="600" height="65" rx="5" fill="#202125" stroke="#393a41"/><text x="14" y="25" fill="#eee" font-size="14">分辨率</text><text x="14" y="45" fill="#999da7" font-size="11">限制最长边；原始分辨率画质最高</text><rect x="445" y="15" width="140" height="35" rx="5" fill="#121316" stroke="#404149"/><text x="466" y="38" fill="#eee" font-size="13">原始分辨率　⌄</text></g>
+      <g transform="translate(0 73)"><rect width="600" height="65" rx="5" fill="#202125" stroke="#393a41"/><text x="14" y="25" fill="#eee" font-size="14">FPS</text><text x="14" y="45" fill="#999da7" font-size="11">设备不支持时编码器会自动降低</text><rect x="445" y="15" width="140" height="35" rx="5" fill="#121316" stroke="#404149"/><text x="480" y="38" fill="#eee" font-size="13">不限制　⌄</text></g>
+      <g transform="translate(0 146)"><rect width="600" height="65" rx="5" fill="#202125" stroke="#393a41"/><text x="14" y="25" fill="#eee" font-size="14">视频码率</text><text x="14" y="45" fill="#999da7" font-size="11">越高越清晰，同时占用更多 USB 带宽</text><rect x="445" y="15" width="140" height="35" rx="5" fill="#121316" stroke="#404149"/><text x="490" y="38" fill="#eee" font-size="13">8 Mbps　⌄</text></g>
+      <g transform="translate(0 219)"><rect width="600" height="65" rx="5" fill="#202125" stroke="#393a41"/><text x="14" y="25" fill="#eee" font-size="14">视频编码</text><text x="14" y="45" fill="#999da7" font-size="11">H.264 兼容性最好；H.265/AV1 取决于手机</text><rect x="445" y="15" width="140" height="35" rx="5" fill="#121316" stroke="#404149"/><text x="500" y="38" fill="#eee" font-size="13">H264　⌄</text></g>
+      <g transform="translate(0 292)"><rect width="600" height="65" rx="5" fill="#202125" stroke="#393a41"/><text x="14" y="25" fill="#eee" font-size="14">投屏方向</text><text x="14" y="45" fill="#999da7" font-size="11">只旋转电脑画面，不改变手机系统方向</text><rect x="445" y="15" width="140" height="35" rx="5" fill="#121316" stroke="#404149"/><text x="482" y="38" fill="#eee" font-size="13">跟随手机　⌄</text></g>
+      <g transform="translate(0 365)"><rect width="600" height="65" rx="5" fill="#202125" stroke="#393a41"/><text x="14" y="25" fill="#eee" font-size="14">音频转发（Android 11+）</text><text x="14" y="45" fill="#999da7" font-size="11">将手机声音传到电脑</text><rect x="535" y="21" width="48" height="24" rx="12" fill="#55585f"/><circle cx="548" cy="33" r="9" fill="#eee"/></g>
+      <g transform="translate(0 438)"><rect width="600" height="65" rx="5" fill="#202125" stroke="#393a41"/><text x="14" y="25" fill="#eee" font-size="14">音频编码</text><text x="14" y="45" fill="#999da7" font-size="11">音频转发启用后使用</text><rect x="445" y="15" width="140" height="35" rx="5" fill="#121316" stroke="#404149"/><text x="500" y="38" fill="#eee" font-size="13">OPUS　⌄</text></g>
+      <g transform="translate(0 511)"><rect width="600" height="65" rx="5" fill="#202125" stroke="#393a41"/><text x="14" y="25" fill="#eee" font-size="14">音频码率</text><text x="14" y="45" fill="#999da7" font-size="11">音频转发启用后使用</text><rect x="445" y="15" width="140" height="35" rx="5" fill="#121316" stroke="#404149"/><text x="480" y="38" fill="#eee" font-size="13">128 Kbps　⌄</text></g>
+    </g>
+    <g transform="translate(865 180)">
+      <g><rect width="595" height="80" rx="5" fill="#202125" stroke="#393a41"/><text x="14" y="31" fill="#eee" font-size="14">窗口置顶</text><text x="14" y="52" fill="#999da7" font-size="11">让投屏窗口保持在其他窗口前面</text><rect x="530" y="27" width="48" height="24" rx="12" fill="#55585f"/><circle cx="543" cy="39" r="9" fill="#eee"/></g>
+      <g transform="translate(0 90)"><rect width="595" height="80" rx="5" fill="#202125" stroke="#393a41"/><text x="14" y="31" fill="#eee" font-size="14">显示投屏标题栏</text><text x="14" y="52" fill="#999da7" font-size="11">显示窗口与 Android 真实控制按钮</text><rect x="530" y="27" width="48" height="24" rx="12" fill="#c52a21"/><circle cx="565" cy="39" r="9" fill="#fff"/></g>
+      <g transform="translate(0 180)"><rect width="595" height="80" rx="5" fill="#202125" stroke="#393a41"/><text x="14" y="31" fill="#eee" font-size="14">按键映射透明度</text><text x="14" y="52" fill="#999da7" font-size="11">调整投屏窗口上的按键提示透明度</text><line x1="410" y1="40" x2="570" y2="40" stroke="#4a4b50" stroke-width="5"/><line x1="410" y1="40" x2="505" y2="40" stroke="#c52a21" stroke-width="5"/><circle cx="505" cy="40" r="8" fill="#c52a21"/></g>
+      <g transform="translate(0 270)"><rect width="595" height="80" rx="5" fill="#202125" stroke="#393a41"/><text x="14" y="31" fill="#eee" font-size="14">保持唤醒</text><text x="14" y="52" fill="#999da7" font-size="11">投屏期间阻止设备自动休眠</text><rect x="530" y="27" width="48" height="24" rx="12" fill="#55585f"/><circle cx="543" cy="39" r="9" fill="#eee"/></g>
+      <g transform="translate(0 360)"><rect width="595" height="80" rx="5" fill="#202125" stroke="#393a41"/><text x="14" y="31" fill="#eee" font-size="14">剪贴板同步</text><text x="14" y="52" fill="#999da7" font-size="11">允许电脑与手机同步复制的文本</text><rect x="530" y="27" width="48" height="24" rx="12" fill="#55585f"/><circle cx="543" cy="39" r="9" fill="#eee"/></g>
+    </g>
+  </g>
+  <text x="205" y="827" fill="#8f939c" font-family="Microsoft YaHei" font-size="13">设置直接保存到 data/config.json，不依赖网页接口。</text>
+</svg>

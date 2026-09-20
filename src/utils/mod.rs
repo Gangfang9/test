@@ -140,6 +140,11 @@ pub struct ChannelReceiverM(
     pub crossbeam_channel::Receiver<(MaskCommand, oneshot::Sender<Result<String, String>>)>,
 );
 
+#[derive(Resource, Clone)]
+pub struct ChannelSenderM(
+    pub crossbeam_channel::Sender<(MaskCommand, oneshot::Sender<Result<String, String>>)>,
+);
+
 #[derive(Resource)]
 pub struct ChannelSenderD(pub tokio::sync::mpsc::UnboundedSender<ControllerCommand>);
 

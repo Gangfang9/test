@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="860" viewBox="0 0 1500 860">
+  <defs>
+    <style>
+      .cn{font-family:'Microsoft YaHei','Noto Sans SC',sans-serif}.title{fill:#f2f2f4;font-size:30px;font-weight:600}.h2{fill:#ededf0;font-size:19px;font-weight:600}.body{fill:#e7e7ea;font-size:15px}.muted{fill:#92959e;font-size:13px}.nav{fill:#eeeeef;font-size:15px}.active{fill:#f34035;font-size:15px}.btn{fill:#fff;font-size:14px}.tiny{fill:#a0a3ab;font-size:12px}
+    </style>
+  </defs>
+  <rect width="1500" height="860" fill="#09090b"/>
+  <rect x="0" y="0" width="1500" height="34" fill="#23262c"/>
+  <text x="14" y="23" class="cn muted">JX手游助手</text>
+  <rect x="1360" width="46" height="34" fill="#30343b"/><text x="1377" y="23" class="cn muted">⌖</text>
+  <rect x="1406" width="46" height="34" fill="#30343b"/><text x="1424" y="22" class="cn muted">—</text>
+  <rect x="1452" width="48" height="34" fill="#30343b"/><text x="1470" y="23" class="cn muted">□</text>
+  <rect x="0" y="34" width="180" height="792" fill="#111215"/>
+  <rect x="29" y="60" width="20" height="20" rx="1" fill="none" stroke="#ef1111" stroke-width="3"/>
+  <rect x="26" y="57" width="9" height="9" fill="#111215"/>
+  <text x="62" y="77" class="cn" fill="#f4f4f5" font-size="17" font-weight="600">JX手游助手</text>
+  <rect x="10" y="111" width="160" height="48" rx="8" fill="#4a1311"/>
+  <text x="25" y="141" class="cn active">▣</text><text x="54" y="141" class="cn active">设备</text>
+  <text x="25" y="200" class="cn nav">⌨</text><text x="54" y="200" class="cn nav">映射</text>
+  <text x="25" y="257" class="cn nav">⚙</text><text x="54" y="257" class="cn nav">背景设置</text>
+
+  <rect x="180" y="34" width="1320" height="792" fill="#09090b"/>
+  <rect x="212" y="70" width="3" height="30" fill="#c81f17"/><text x="226" y="96" class="cn title">USB设备连接</text>
+  <text x="226" y="119" class="cn muted">USB ADB  ·  单设备模式</text>
+
+  <rect x="212" y="143" width="956" height="76" rx="7" fill="#11141a" stroke="#293e62"/>
+  <text x="232" y="174" class="cn body" fill="#f1f2f4">●  第一版支持一台 USB ADB 设备</text>
+  <text x="232" y="199" class="cn muted">    请在手机上开启 USB 调试并授权此电脑，连接后点击刷新设备</text>
+  <rect x="212" y="239" width="102" height="39" rx="5" fill="#202126" stroke="#44464c"/><text x="233" y="264" class="cn btn">↻  重启 ADB</text>
+  <rect x="324" y="239" width="102" height="39" rx="5" fill="#c62219"/><text x="345" y="264" class="cn btn">↻  刷新设备</text>
+
+  <rect x="212" y="299" width="956" height="469" rx="8" fill="#17181c" stroke="#383a40"/>
+  <text x="232" y="334" class="cn h2">受控设备</text><text x="1080" y="332" class="cn tiny">1 台设备</text>
+  <rect x="232" y="352" width="916" height="46" fill="#202126"/>
+  <text x="249" y="380" class="cn muted">身份码</text><text x="670" y="380" class="cn muted">状态</text><text x="989" y="380" class="cn muted">操作</text>
+  <line x1="232" y1="465" x2="1148" y2="465" stroke="#34363b"/>
+  <text x="249" y="438" class="cn body">4793d870</text>
+  <circle cx="670" cy="432" r="5" fill="#39b968"/><text x="684" y="438" class="cn body">已连接</text>
+  <rect x="982" y="413" width="91" height="38" rx="5" fill="#c62219"/><text x="1013" y="438" class="cn btn">投屏</text>
+  <text x="232" y="742" class="cn muted">仅显示当前通过 USB ADB 授权的设备</text>
+
+  <rect x="1190" y="70" width="278" height="698" rx="8" fill="#17181c" stroke="#383a40"/>
+  <text x="1211" y="105" class="cn h2">设备预览</text>
+  <rect x="1370" y="83" width="76" height="26" rx="13" fill="#153421"/><circle cx="1385" cy="96" r="4" fill="#49c87b"/><text x="1396" y="101" class="cn tiny" fill="#7edb9e">待投屏</text>
+  <rect x="1225" y="139" width="208" height="430" rx="21" fill="#08090c" stroke="#5a5d66" stroke-width="2"/>
+  <rect x="1287" y="150" width="84" height="6" rx="3" fill="#2e3036"/>
+  <circle cx="1329" cy="319" r="31" fill="#21100f"/><text x="1318" y="328" class="cn" fill="#d94a42" font-size="28">▣</text>
+  <text x="1270" y="376" class="cn body">连接设备后</text><text x="1273" y="401" class="cn body">点击“投屏”</text>
+  <text x="1294" y="604" class="cn muted">USB  •  ADB</text>
+  <rect x="1225" y="636" width="208" height="88" rx="6" fill="#202126"/>
+  <text x="1243" y="665" class="cn body">连接说明</text><text x="1243" y="689" class="cn tiny">开启 USB 调试并确认授权</text><text x="1243" y="710" class="cn tiny">刷新后即可启动投屏</text>
+
+  <rect x="0" y="826" width="1500" height="34" fill="#101115" stroke="#292b30"/>
+  <circle cx="22" cy="843" r="4" fill="#d49c20"/><text x="34" y="848" class="cn muted">正在检测 ADB 设备</text>
+</svg>

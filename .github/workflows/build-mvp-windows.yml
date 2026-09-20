@@ -1,4 +1,4 @@
-name: Build LE KeyMapper MVP for Windows
+name: Build JX手游助手 for Windows
 
 on:
   workflow_dispatch:
@@ -147,10 +147,10 @@ jobs:
             exit $packageExitCode
           }
 
-      - name: Upload LE KeyMapper MVP
+      - name: Upload JX手游助手
         uses: actions/upload-artifact@v4
         with:
-          name: LE-KeyMapper-MVP-Windows-x64
+          name: JX-Mobile-Assistant-Windows-x64
           path: target/release/scrcpy-mask-windows-x64.zip
           if-no-files-found: error
           retention-days: 14
