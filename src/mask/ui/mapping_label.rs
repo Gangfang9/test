@@ -127,7 +127,7 @@ fn redraw_normal_mapping_label(
 fn update_labels(
     mask_size: Res<MaskSize>,
     opacity: Res<LabelOpacity>,
-    window: Single<&Window>,
+    window: Single<&Window, With<PrimaryWindow>>,
     mut query: Query<(
         &MappingLabel,
         &mut BackgroundColor,

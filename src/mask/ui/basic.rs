@@ -103,7 +103,7 @@ impl Plugin for BasicPlugin {
 
 fn setup_ui(
     mut commands: Commands,
-    window: Single<(Entity, &mut Window)>,
+    window: Single<(Entity, &mut Window), With<PrimaryWindow>>,
     mut images: ResMut<Assets<Image>>,
     mut yuv_materials: ResMut<Assets<YuvVideoMaterial>>,
     asset_server: Res<AssetServer>,
@@ -533,7 +533,7 @@ fn spawn_tooltip(parent: &mut ChildSpawnerCommands, font: Handle<Font>, label: &
 }
 
 fn handle_titlebar_drag(
-    mut window: Single<&mut Window>,
+    mut window: Single<&mut Window, With<PrimaryWindow>>,
     interaction_query: Query<&Interaction, (With<TitlebarMarker>, Changed<Interaction>)>,
     button_query: Query<
         &Interaction,
@@ -553,7 +553,7 @@ fn handle_titlebar_drag(
 }
 
 fn handle_titlebar_buttons(
-    mut window: Single<&mut Window>,
+    mut window: Single<&mut Window, With<PrimaryWindow>>,
     mut maximized: Local<bool>,
     minimize_query: Query<&Interaction, (With<MinimizeButton>, Changed<Interaction>)>,
     maximize_query: Query<&Interaction, (With<MaximizeButton>, Changed<Interaction>)>,
@@ -625,7 +625,7 @@ const CLOSE_PRESSED_BG: Color = Color::srgba(0.60, 0.06, 0.06, 1.0);
 const PIN_ACTIVE_BG: Color = Color::srgba(0.20, 0.45, 0.65, 0.85);
 
 fn button_interaction(
-    window: Single<&Window>,
+    window: Single<&Window, With<PrimaryWindow>>,
     minimize_query: Query<(Entity, &Interaction), (With<MinimizeButton>, Changed<Interaction>)>,
     maximize_query: Query<(Entity, &Interaction), (With<MaximizeButton>, Changed<Interaction>)>,
     pushpin_query: Query<(Entity, &Interaction), (With<PushpinButton>, Changed<Interaction>)>,
@@ -746,7 +746,7 @@ fn resize_handle_priority(handle: CompassOctant) -> u8 {
 }
 
 fn handle_resize(
-    mut window: Single<&mut Window>,
+    mut window: Single<&mut Window, With<PrimaryWindow>>,
     mut resize_state: ResMut<MaskResizeState>,
     query: Query<(&ResizeHandle, &Interaction), Changed<Interaction>>,
 ) {
@@ -777,7 +777,7 @@ fn active_resize_handle(
 
 fn sync_resize_cursor(
     resize_query: Query<(&ResizeHandle, &Interaction)>,
-    mut cursor_query: Single<&mut CursorIcon, With<Window>>,
+    mut cursor_query: Single<&mut CursorIcon, With<PrimaryWindow>>,
 ) {
     let resize_cursor = active_resize_handle(resize_query)
         .map(cursor_for_resize_direction)
@@ -806,7 +806,7 @@ fn sync_titlebar_visibility(
 }
 
 fn sync_titlebar_title_visibility(
-    window: Single<&Window, Changed<Window>>,
+    window: Single<&Window, (With<PrimaryWindow>, Changed<Window>)>,
     mut title_query: Query<&mut Node, With<TitlebarTitleMarker>>,
 ) {
     let display = if window.resolution.width() >= TITLEBAR_TITLE_MIN_WINDOW_WIDTH {
@@ -823,7 +823,7 @@ fn sync_titlebar_title_visibility(
 }
 
 fn sync_pushpin_style(
-    window: Single<&Window, Changed<Window>>,
+    window: Single<&Window, (With<PrimaryWindow>, Changed<Window>)>,
     mut pushpin_query: Query<(&Interaction, &mut BackgroundColor), With<PushpinButton>>,
 ) {
     let pinned = window.window_level == WindowLevel::AlwaysOnTop;

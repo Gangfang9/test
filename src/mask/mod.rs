@@ -14,7 +14,7 @@ use bevy::{
     math::Vec2,
     prelude::{ButtonInput, IntoScheduleConfigs, MouseButton, Resource, SystemSet},
     time::{Time, Timer, TimerMode},
-    window::{Window, WindowMoved, WindowPosition, WindowResized},
+    window::{PrimaryWindow, Window, WindowMoved, WindowPosition, WindowResized},
 };
 use bevy_ui_render::prelude::UiMaterialPlugin;
 
@@ -64,7 +64,7 @@ impl Plugin for MaskPlugins {
     }
 }
 
-fn init_mask_size(mut commands: Commands, window: Single<&Window>) {
+fn init_mask_size(mut commands: Commands, window: Single<&Window, With<PrimaryWindow>>) {
     let config = LocalConfig::get();
     let mask_h = if config.titlebar_visible {
         (window.size().y - TITLEBAR_HEIGHT).max(0.0)
@@ -153,13 +153,17 @@ fn sync_mask_size(
     mut resize_reader: MessageReader<WindowResized>,
     titlebar_state: Res<TitlebarState>,
     mut mask_size: ResMut<MaskSize>,
-    mut window: Single<&mut Window>,
+    window: Single<(Entity, &mut Window), With<PrimaryWindow>>,
     time: Res<Time>,
     mouse_input: Res<ButtonInput<MouseButton>>,
     mut resize_state: ResMut<MaskResizeState>,
     ws_tx: Res<ChannelSenderWS>,
 ) {
+    let (window_entity, mut window) = window.into_inner();
     for e in resize_reader.read() {
+        if e.window != window_entity {
+            continue;
+        }
         let h = (e.height - titlebar_state.offset()).max(0.0);
         mask_size.0 = Vec2::new(e.width, h);
         resize_state.mark_resized();
@@ -231,15 +235,19 @@ fn sync_mask_size(
 
 fn sync_mask_position(
     mut move_reader: MessageReader<WindowMoved>,
-    window: Single<&Window>,
+    window: Single<(Entity, &Window), With<PrimaryWindow>>,
     titlebar_state: Res<TitlebarState>,
     time: Res<Time>,
     mut debounce: Local<MoveDebounce>,
     ws_tx: Res<ChannelSenderWS>,
 ) {
+    let (window_entity, window) = window.into_inner();
     debounce.ensure_init();
 
-    for _ in move_reader.read() {
+    for event in move_reader.read() {
+        if event.window != window_entity {
+            continue;
+        }
         debounce.timer.reset();
         debounce.pending = true;
     }

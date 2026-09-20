@@ -8,7 +8,7 @@ use axum::{
 use bevy::math::Vec2;
 use rust_i18n::t;
 use serde::Deserialize;
-use serde_json::json;
+use serde_json::{Value, json};
 use tokio::sync::oneshot;
 
 use crate::{
@@ -42,7 +42,117 @@ pub fn routers(
         .route("/read_mapping", post(read_mapping))
         .route("/get_mapping_list", get(get_mapping_list))
         .route("/migrate_mapping", post(migrate_mapping))
+        .route("/apply_random_algorithm", post(apply_random_algorithm))
         .with_state(AppStatMapping { m_tx })
+}
+
+#[derive(Deserialize)]
+struct ApplyRandomAlgorithmPayload {
+    algorithm: String,
+    #[serde(default)]
+    enable_randomization: bool,
+}
+
+async fn apply_random_algorithm(
+    State(state): State<AppStatMapping>,
+    Json(payload): Json<ApplyRandomAlgorithmPayload>,
+) -> Result<JsonResponse, WebServerError> {
+    const ALGORITHMS: [&str; 5] = ["ExtremeRandom", "Bezier", "Linear", "Sine", "RandomWalk"];
+    if !ALGORITHMS.contains(&payload.algorithm.as_str()) {
+        return Err(WebServerError::bad_request("不支持的随机算法"));
+    }
+
+    let mapping_dir = relate_to_data_path(["mapping"]);
+    let entries = fs::read_dir(&mapping_dir)
+        .map_err(|error| WebServerError::bad_request(error.to_string()))?;
+    let mut updates: Vec<(std::path::PathBuf, String, String, usize)> = Vec::new();
+    let mut mappings_updated = 0usize;
+    let mut mappings_skipped = 0usize;
+
+    for entry in entries {
+        let entry = entry.map_err(|error| WebServerError::bad_request(error.to_string()))?;
+        let path = entry.path();
+        if path.extension().and_then(|value| value.to_str()) != Some("json") {
+            continue;
+        }
+        let original = fs::read_to_string(&path)
+            .map_err(|error| WebServerError::bad_request(error.to_string()))?;
+        let mut value: Value = serde_json::from_str(&original)
+            .map_err(|error| WebServerError::bad_request(format!("{}: {error}", path.display())))?;
+        let mut changed = 0usize;
+        if let Some(mappings) = value.get_mut("mappings").and_then(Value::as_array_mut) {
+            for mapping in mappings {
+                let kind = mapping.get("type").and_then(Value::as_str).unwrap_or_default().to_string();
+                if matches!(kind.as_str(), "DirectionPad" | "MouseCastSpell" | "Fps" | "Fire") {
+                    mapping["random_offset_algorithm"] = Value::String(payload.algorithm.clone());
+                    if payload.enable_randomization {
+                        match kind.as_str() {
+                            "DirectionPad" => mapping["enable_randomization"] = Value::Bool(true),
+                            "MouseCastSpell" => {
+                                mapping["enable_initial_swipe_randomization"] = Value::Bool(true)
+                            }
+                            _ => {}
+                        }
+                    }
+                    changed += 1;
+                } else {
+                    mappings_skipped += 1;
+                }
+            }
+        }
+        if changed == 0 {
+            continue;
+        }
+        let typed: MappingConfig = serde_json::from_value(value.clone())
+            .map_err(|error| WebServerError::bad_request(format!("{}: {error}", path.display())))?;
+        if let Some(error) = mapping_validation_error(&typed) {
+            return Err(error);
+        }
+        let modified = serde_json::to_string_pretty(&value)
+            .map_err(|error| WebServerError::bad_request(error.to_string()))?;
+        mappings_updated += changed;
+        updates.push((path, original, modified, changed));
+    }
+
+    if updates.is_empty() {
+        return Err(WebServerError::bad_request("没有找到支持随机算法的映射按键"));
+    }
+
+    let mut written = 0usize;
+    for (path, _, modified, _) in &updates {
+        if let Err(error) = fs::write(path, modified) {
+            for (rollback_path, original, _, _) in updates.iter().take(written) {
+                let _ = fs::write(rollback_path, original);
+            }
+            return Err(WebServerError::bad_request(format!("保存失败，已回滚: {error}")));
+        }
+        written += 1;
+    }
+
+    let active = LocalConfig::get().active_mapping_file;
+    let active_changed = updates.iter().any(|(path, _, _, _)| {
+        path.file_name().and_then(|name| name.to_str()) == Some(active.as_str())
+    });
+    if active_changed {
+        let (oneshot_tx, oneshot_rx) = oneshot::channel();
+        state.m_tx.send((MaskCommand::LoadAndActivateMappingConfig { file_name: active }, oneshot_tx))
+            .map_err(|error| WebServerError::bad_request(error.to_string()))?;
+        if let Ok(Err(error)) = oneshot_rx.await {
+            for (path, original, _, _) in &updates {
+                let _ = fs::write(path, original);
+            }
+            return Err(WebServerError::bad_request(format!("运行时重载失败，已回滚: {error}")));
+        }
+    }
+
+    Ok(JsonResponse::success(
+        "已应用全局随机算法",
+        Some(json!({
+            "files_updated": updates.len(),
+            "mappings_updated": mappings_updated,
+            "mappings_skipped": mappings_skipped,
+        })),
+    ))
 }
 
 #[derive(Deserialize)]

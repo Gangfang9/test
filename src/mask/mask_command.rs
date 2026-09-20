@@ -80,7 +80,7 @@ pub fn handle_mask_command(
     cursor_pos: Res<CursorPosition>,
     mapping_state: Res<State<MappingState>>,
     cursor_state: Res<State<CursorState>>,
-    mut window: Single<&mut Window>,
+    mut window: Single<&mut Window, With<PrimaryWindow>>,
     mut next_mapping_state: ResMut<NextState<MappingState>>,
     mut next_cursor_state: ResMut<NextState<CursorState>>,
     mut ineffable: IneffableCommands,
@@ -148,8 +148,8 @@ pub fn handle_mask_command(
                     next_cursor_state.set(CursorState::Normal);
                     next_mapping_state.set(MappingState::Stop);
                     log::info!("[Mapping] {}", t!("mask.exitStopMappingMode"));
-                    window.visible = true;
-                    window.focused = true;
+                    window.visible = false;
+                    window.focused = false;
                     native_ui.pending_focus.frames_remaining = 0;
                     window.resolution.set(1280., 760. + TITLEBAR_HEIGHT);
                     for mut node in native_ui.projection.iter_mut() {
@@ -270,7 +270,7 @@ pub fn handle_mask_command(
 
 pub fn apply_pending_window_focus(
     mut pending_focus: ResMut<PendingWindowFocus>,
-    mut window: Single<&mut Window>,
+    mut window: Single<&mut Window, With<PrimaryWindow>>,
 ) {
     if pending_focus.frames_remaining == 0 {
         return;

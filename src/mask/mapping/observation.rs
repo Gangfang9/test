@@ -7,7 +7,7 @@ use bevy::{
     },
     math::Vec2,
     state::state::State,
-    window::Window,
+    window::{PrimaryWindow, Window},
 };
 use bevy_ineffable::prelude::{ContinuousBinding, Ineffable, InputBinding};
 use serde::{Deserialize, Serialize};
@@ -472,7 +472,7 @@ pub fn handle_observation(
 }
 
 pub fn handle_observation_focus_lost(
-    window: Single<&Window>,
+    window: Single<&Window, With<PrimaryWindow>>,
     mut was_focused: Local<bool>,
     active_mapping: Res<ActiveMappingConfig>,
     cs_tx_res: Res<ChannelSenderCS>,

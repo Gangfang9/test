@@ -7,7 +7,7 @@
 
 use bevy::{
     prelude::*,
-    window::{PrimaryWindow, RawHandleWrapper},
+    window::{Monitor, MonitorSelection, PrimaryMonitor, RawHandleWrapper, WindowCloseRequested, WindowPosition},
 };
 use std::time::Duration;
 use wry::{
@@ -15,12 +15,12 @@ use wry::{
     dpi::{PhysicalPosition, PhysicalSize},
 };
 
-use crate::{
-    config::LocalConfig,
-    mask::ui::basic::{ProjectionBodyMarker, TITLEBAR_HEIGHT},
-};
+use crate::config::LocalConfig;
 
 pub struct DesktopWebViewPlugin;
+
+#[derive(Component)]
+pub struct ManagementWindow;
 
 struct DesktopWebViewState {
     webview: Option<WebView>,
@@ -44,20 +44,59 @@ impl Default for DesktopWebViewState {
 impl Plugin for DesktopWebViewPlugin {
     fn build(&self, app: &mut App) {
         app.insert_non_send_resource(DesktopWebViewState::default())
-            .add_systems(Update, sync_desktop_webview);
+            .add_systems(PostStartup, spawn_management_window)
+            .add_systems(Update, (sync_desktop_webview, exit_when_management_closes));
     }
 }
 
+fn exit_when_management_closes(
+    mut close_events: MessageReader<WindowCloseRequested>,
+    management: Query<Entity, With<ManagementWindow>>,
+    mut exit: MessageWriter<AppExit>,
+) {
+    for event in close_events.read() {
+        if management.get(event.window).is_ok() {
+            exit.write(AppExit::Success);
+        }
+    }
+}
+
+fn spawn_management_window(
+    mut commands: Commands,
+    monitor: Query<&Monitor, With<PrimaryMonitor>>,
+) {
+    let (width, height) = monitor
+        .iter()
+        .next()
+        .map(|monitor| {
+            let logical_width = monitor.physical_width as f64 / monitor.scale_factor;
+            let logical_height = monitor.physical_height as f64 / monitor.scale_factor;
+            ((logical_width * 0.6) as f32, (logical_height * 0.6) as f32)
+        })
+        .unwrap_or((1152., 648.));
+    commands.spawn((
+        Window {
+            title: "JX手游助手".into(),
+            resolution: (width, height).into(),
+            position: WindowPosition::Centered(MonitorSelection::Primary),
+            decorations: true,
+            transparent: false,
+            resizable: true,
+            visible: false,
+            focused: false,
+            ..default()
+        },
+        ManagementWindow,
+    ));
+}
+
 fn webview_bounds(window: &Window) -> (Rect, UVec2) {
-    let scale = window.resolution.scale_factor() as f64;
     let width = window.resolution.physical_width().max(1);
-    let full_height = window.resolution.physical_height().max(1);
-    let titlebar = (TITLEBAR_HEIGHT as f64 * scale).round() as u32;
-    let content_height = full_height.saturating_sub(titlebar).max(1);
+    let content_height = window.resolution.physical_height().max(1);
     let size = UVec2::new(width, content_height);
     (
         Rect {
-            position: PhysicalPosition::new(0, titlebar as i32).into(),
+            position: PhysicalPosition::new(0, 0).into(),
             size: PhysicalSize::new(width, content_height).into(),
         },
         size,
@@ -67,17 +106,13 @@ fn webview_bounds(window: &Window) -> (Rect, UVec2) {
 fn sync_desktop_webview(
     time: Res<Time>,
     mut state: NonSendMut<DesktopWebViewState>,
-    mut windows: Query<(&mut Window, &RawHandleWrapper), With<PrimaryWindow>>,
-    projection: Query<&Node, With<ProjectionBodyMarker>>,
+    mut windows: Query<(&mut Window, &RawHandleWrapper), With<ManagementWindow>>,
 ) {
     let Ok((mut window, raw_handle)) = windows.single_mut() else {
         return;
     };
 
-    let projecting = projection
-        .iter()
-        .any(|node| node.display != Display::None);
-    let should_show = !projecting;
+    let should_show = true;
     let (bounds, content_size) = webview_bounds(&window);
 
     if state.webview.is_none() {

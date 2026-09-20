@@ -1,6 +1,6 @@
-import { Alert, Button, Card, Flex, Select, Slider, Switch, Typography } from "antd";
+import { Alert, Button, Card, Flex, Popconfirm, Select, Slider, Switch, Typography } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useAppDispatch, useAppSelector } from "../store/store";
 import {
   forceSetLocalConfig,
@@ -20,7 +20,8 @@ import {
 } from "../store/localConfig";
 import { setIsLoading } from "../store/other";
 import { useMessageContext } from "../hooks";
-import { requestGet } from "../utils";
+import { requestGet, requestPost } from "../utils";
+import type { RandomOffsetAlgorithm } from "./mappings/mapping";
 
 type SettingRowProps = {
   label: string;
@@ -73,6 +74,30 @@ export default function Settings() {
   const dispatch = useAppDispatch();
   const config = useAppSelector((state) => state.localConfig);
   const messageApi = useMessageContext();
+  const [globalRandomAlgorithm, setGlobalRandomAlgorithm] =
+    useState<RandomOffsetAlgorithm>("Bezier");
+  const [enableGlobalRandomization, setEnableGlobalRandomization] = useState(true);
+
+  async function applyGlobalRandomAlgorithm() {
+    dispatch(setIsLoading(true));
+    try {
+      const response = await requestPost<{
+        files_updated: number;
+        mappings_updated: number;
+        mappings_skipped: number;
+      }>("/api/mapping/apply_random_algorithm", {
+        algorithm: globalRandomAlgorithm,
+        enable_randomization: enableGlobalRandomization,
+      });
+      messageApi?.success(
+        `已更新 ${response.data.files_updated} 个配置、${response.data.mappings_updated} 个映射按键，跳过 ${response.data.mappings_skipped} 个不适用按键`,
+      );
+    } catch (error) {
+      messageApi?.error(error as string);
+    } finally {
+      dispatch(setIsLoading(false));
+    }
+  }
 
   async function reloadConfig() {
     dispatch(setIsLoading(true));
@@ -159,6 +184,42 @@ export default function Settings() {
       </Flex>
 
       <Alert className="mt-5" type="warning" showIcon message="区域投屏、录屏和暂停尚未接通完整的数据链路，因此本版不显示这些入口。" />
+
+      <h3 className="title-with-line-sub">映射</h3>
+      <SettingRow
+        label="所有映射按键随机算法"
+        description="批量应用到全部配置中支持随机算法的方向盘、万向拖动、FPS 和开火按键"
+      >
+        <Flex align="center" gap="small" wrap>
+          <Select
+            className="w-9rem"
+            value={globalRandomAlgorithm}
+            onChange={setGlobalRandomAlgorithm}
+            options={[
+              { value: "ExtremeRandom", label: "极限随机" },
+              { value: "Bezier", label: "贝塞尔曲线" },
+              { value: "Linear", label: "线性插值" },
+              { value: "Sine", label: "正弦波" },
+              { value: "RandomWalk", label: "随机游走" },
+            ]}
+          />
+          <Switch
+            checkedChildren="同时启用"
+            unCheckedChildren="仅改算法"
+            checked={enableGlobalRandomization}
+            onChange={setEnableGlobalRandomization}
+          />
+          <Popconfirm
+            title="应用到所有映射配置？"
+            description="程序会验证全部配置；失败时自动恢复原文件。"
+            okText="应用"
+            cancelText="取消"
+            onConfirm={applyGlobalRandomAlgorithm}
+          >
+            <Button type="primary">应用到全部配置</Button>
+          </Popconfirm>
+        </Flex>
+      </SettingRow>
     </div>
   );
 }

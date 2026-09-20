@@ -1122,7 +1122,7 @@ export default function Mappings() {
       </Modal>
       <Flex
         vertical
-        gap={32}
+        gap={16}
         id="mappings-container"
         className="page-container hide-scrollbar"
       >
@@ -1140,7 +1140,7 @@ export default function Mappings() {
         onMigrateAction={migrateMappingFile}
       />
       <section>
-        <Flex justify="space-between" align="center">
+        <Flex justify="space-between" align="center" wrap gap="small">
           <Space.Compact>
             <Select
               className="w-80"

@@ -14,7 +14,7 @@ use bevy::{
     },
     math::Vec2,
     state::state::State,
-    window::Window,
+    window::{PrimaryWindow, Window},
 };
 use bevy_ineffable::prelude::{ContinuousBinding, Ineffable, InputBinding, PulseBinding};
 use serde::{Deserialize, Serialize};
@@ -898,7 +898,7 @@ pub fn handle_mouse_cast_spell(
 }
 
 pub fn handle_mouse_cast_spell_focus_lost(
-    window: Single<&Window>,
+    window: Single<&Window, With<PrimaryWindow>>,
     mut was_focused: Local<bool>,
     active_mapping: Res<ActiveMappingConfig>,
     cs_tx_res: Res<ChannelSenderCS>,

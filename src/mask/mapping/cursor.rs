@@ -306,7 +306,7 @@ pub fn restore_fps_touch(
 
 fn handle_cursor_normal(
     accumulated_motion: Res<AccumulatedMouseMotion>,
-    window: Single<&Window>,
+    window: Single<&Window, With<PrimaryWindow>>,
     mut cursor_pos: ResMut<CursorPosition>,
     titlebar_state: Res<TitlebarState>,
     mut normal_capture: ResMut<NormalCursorCapture>,
@@ -332,7 +332,7 @@ fn handle_cursor_normal(
 }
 
 fn sync_normal_cursor_capture_window(
-    window: Single<(&mut Window, &mut CursorOptions)>,
+    window: Single<(&mut Window, &mut CursorOptions), With<PrimaryWindow>>,
     mut normal_capture: ResMut<NormalCursorCapture>,
     mut cursor_pos: ResMut<CursorPosition>,
     mask_size: Res<MaskSize>,
@@ -492,7 +492,7 @@ fn clamped_system_cursor_restore_pos(pos: Vec2, mask_size: Vec2) -> Vec2 {
 }
 
 fn on_enter_cursor_fps(
-    window: Single<(&mut Window, &mut CursorOptions)>,
+    window: Single<(&mut Window, &mut CursorOptions), With<PrimaryWindow>>,
     mut cursor_pos: ResMut<CursorPosition>,
     mut ignore_first_motion: ResMut<IgnoreFirstMotion>,
     fps_config: Res<ActiveCursorFpsConfig>,
@@ -516,7 +516,7 @@ fn on_enter_cursor_fps(
 }
 
 fn on_exit_cursor_fps(
-    window: Single<(&mut Window, &mut CursorOptions)>,
+    window: Single<(&mut Window, &mut CursorOptions), With<PrimaryWindow>>,
     mut cursor_pos: ResMut<CursorPosition>,
     fps_config: Res<ActiveCursorFpsConfig>,
     mask_size: Res<MaskSize>,
@@ -540,7 +540,7 @@ pub const FPS_MARGIN: f32 = 25.;
 const FPS_MAX_RECENTER_ITERATIONS: usize = 4;
 
 fn run_if_handle_cursor_fps(
-    window: Single<&Window>,
+    window: Single<&Window, With<PrimaryWindow>>,
     fps_config: Res<ActiveCursorFpsConfig>,
 ) -> bool {
     // fire key is not pressed and window is focused
