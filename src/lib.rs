@@ -6,6 +6,9 @@ pub mod tokio_tasks;
 pub mod utils;
 pub mod web;
 
+#[cfg(target_os = "windows")]
+pub mod desktop_webview;
+
 #[cfg(not(target_os = "macos"))]
 pub mod window_alpha;
 

@@ -29,6 +29,8 @@ use scrcpy_mask::{
     },
     web::{self, ws::WebSocketNotification},
 };
+#[cfg(target_os = "windows")]
+use scrcpy_mask::desktop_webview::DesktopWebViewPlugin;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tracing_appender::non_blocking::WorkerGuard;
 
@@ -186,6 +188,9 @@ fn main() {
     .add_plugins(MaskPlugins)
     .add_plugins(NativeUiPlugin)
     .add_systems(Startup, start_servers);
+
+    #[cfg(target_os = "windows")]
+    app.add_plugins(DesktopWebViewPlugin);
 
     #[cfg(target_os = "macos")]
     {
