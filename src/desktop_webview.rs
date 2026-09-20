@@ -7,7 +7,7 @@
 
 use bevy::{
     prelude::*,
-    window::{Monitor, MonitorSelection, PrimaryMonitor, RawHandleWrapper, WindowCloseRequested, WindowPosition},
+    window::{Monitor, MonitorSelection, PrimaryMonitor, RawHandleWrapper, WindowCloseRequested, WindowPosition, WindowResolution},
 };
 use std::time::Duration;
 use wry::{
@@ -77,7 +77,7 @@ fn spawn_management_window(
     commands.spawn((
         Window {
             title: "JX手游助手".into(),
-            resolution: (width, height).into(),
+            resolution: WindowResolution::new(width, height),
             position: WindowPosition::Centered(MonitorSelection::Primary),
             decorations: true,
             transparent: false,
