@@ -12,7 +12,7 @@ use bevy_ui_render::prelude::MaterialNode;
 use crate::{
     config::LocalConfig,
     mask::{
-        MaskFrameSet, MaskResizeState,
+        MaskFrameSet, MaskResizeState, mapping::cursor::CursorFrameSet,
         mask_command::TitlebarState,
         video::{VideoPlayer, YuvVideoMaterial, create_initial_yuv_material},
     },
