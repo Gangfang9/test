@@ -247,7 +247,7 @@ fn setup_ui(
                         _ => "关闭",
                     };
                     button.with_children(|button| {
-                        spawn_tooltip(button, ui_font.clone(), hint);
+                        spawn_tooltip(button, ui_font.clone(), hint, TooltipSide::Right);
                     });
                 }
             });
@@ -268,15 +268,15 @@ fn setup_ui(
     let toolbar_entity = commands
         .spawn((
             Node {
-                width: Val::Px(42.),
+                width: Val::Px(50.),
                 height: Val::Percent(100.),
                 flex_direction: FlexDirection::Column,
                 align_items: AlignItems::Center,
-                row_gap: Val::Px(4.),
-                padding: UiRect::px(0., 0., 4., 4.),
+                row_gap: Val::Px(7.),
+                padding: UiRect::px(8., 8., 8., 8.),
                 ..default()
             },
-            BackgroundColor(titlebar_bg),
+            BackgroundColor(TOOLBAR_BG),
         ))
         .id();
 
@@ -290,6 +290,16 @@ fn setup_ui(
             DeviceAction::Home,
             DeviceAction::AppSwitch,
         ] {
+            // Keep device controls at the top and Android navigation at the
+            // bottom, matching the compact grouped toolbar used by the
+            // reference UI without changing any button behavior.
+            if matches!(action, DeviceAction::Back) {
+                toolbar.spawn(Node {
+                    flex_grow: 1.,
+                    min_height: Val::Px(18.),
+                    ..default()
+                });
+            }
             let icon = match action {
                 DeviceAction::ScreenOff => screen_off_icon.clone(),
                 DeviceAction::ScreenOn => screen_on_icon.clone(),
@@ -304,14 +314,13 @@ fn setup_ui(
                     Button,
                     Node {
                         width: Val::Px(34.),
-                        height: Val::Px(32.),
-                        border: UiRect::all(Val::Px(1.)),
+                        height: Val::Px(34.),
+                        border_radius: BorderRadius::all(Val::Px(3.)),
                         justify_content: JustifyContent::Center,
                         align_items: AlignItems::Center,
                         ..default()
                     },
-                    BackgroundColor(NORMAL_BG),
-                    BorderColor::all(Color::srgba(0.42, 0.44, 0.48, 0.9)),
+                    BackgroundColor(DEVICE_BUTTON_BG),
                     DeviceButton(action),
                 ))
                 .with_child((
@@ -332,7 +341,7 @@ fn setup_ui(
                         DeviceAction::Home => "主页",
                         DeviceAction::AppSwitch => "多任务",
                     };
-                    spawn_tooltip(button, ui_font.clone(), hint);
+                    spawn_tooltip(button, ui_font.clone(), hint, TooltipSide::Left);
                 });
         }
     });
@@ -514,19 +523,35 @@ fn setup_ui(
     });
 }
 
-fn spawn_tooltip(parent: &mut ChildSpawnerCommands, font: Handle<Font>, label: &str) {
+#[derive(Clone, Copy)]
+enum TooltipSide {
+    Left,
+    Right,
+}
+
+fn spawn_tooltip(
+    parent: &mut ChildSpawnerCommands,
+    font: Handle<Font>,
+    label: &str,
+    side: TooltipSide,
+) {
+    let (left, right) = match side {
+        TooltipSide::Left => (Val::Auto, Val::Px(40.)),
+        TooltipSide::Right => (Val::Px(40.), Val::Auto),
+    };
     parent.spawn((
         Node {
             position_type: PositionType::Absolute,
-            left: Val::Px(34.),
-            top: Val::Px(0.),
+            left,
+            right,
+            top: Val::Px(2.),
             min_width: Val::Px(54.),
-            padding: UiRect::axes(Val::Px(8.), Val::Px(4.)),
+            padding: UiRect::axes(Val::Px(9.), Val::Px(5.)),
             border_radius: BorderRadius::all(Val::Px(4.)),
             display: Display::None,
             ..default()
         },
-        BackgroundColor(Color::srgba(0.04, 0.04, 0.045, 0.98)),
+        BackgroundColor(TOOLTIP_BG),
         ZIndex(100),
         TooltipText,
     ))
@@ -537,6 +562,7 @@ fn spawn_tooltip(parent: &mut ChildSpawnerCommands, font: Handle<Font>, label: &
             font_size: FontSize::Px(12.),
             ..default()
         },
+        TextLayout::no_wrap(),
         TextColor(Color::WHITE),
     ));
 }
@@ -629,6 +655,14 @@ const NORMAL_BG: Color = Color::srgba(0.28, 0.30, 0.34, 0.96);
 const HOVERED_BG: Color = Color::srgba(0.46, 0.48, 0.53, 0.98);
 const PRESSED_BG: Color = Color::srgba(0.15, 0.15, 0.15, 0.85);
 
+// Projection toolbar palette: neutral charcoal by default, with the same
+// restrained dark-red interaction color used by the management UI.
+const TOOLBAR_BG: Color = Color::srgba(0.09, 0.09, 0.095, 1.0);
+const DEVICE_BUTTON_BG: Color = Color::srgba(0.16, 0.16, 0.17, 1.0);
+const DEVICE_BUTTON_HOVERED_BG: Color = Color::srgba(0.31, 0.12, 0.11, 1.0);
+const DEVICE_BUTTON_PRESSED_BG: Color = Color::srgba(0.56, 0.14, 0.11, 1.0);
+const TOOLTIP_BG: Color = Color::srgba(0.08, 0.08, 0.085, 0.98);
+
 const CLOSE_HOVER_BG: Color = Color::srgba(0.77, 0.12, 0.12, 0.95);
 const CLOSE_PRESSED_BG: Color = Color::srgba(0.60, 0.06, 0.06, 1.0);
 const PIN_ACTIVE_BG: Color = Color::srgba(0.20, 0.45, 0.65, 0.85);
@@ -694,9 +728,9 @@ fn button_interaction(
     for (entity, interaction) in device_btn_query.iter() {
         if let Ok(mut bg) = bg_query.get_mut(entity) {
             *bg = match *interaction {
-                Interaction::Pressed => PRESSED_BG,
-                Interaction::Hovered => HOVERED_BG,
-                Interaction::None => NORMAL_BG,
+                Interaction::Pressed => DEVICE_BUTTON_PRESSED_BG,
+                Interaction::Hovered => DEVICE_BUTTON_HOVERED_BG,
+                Interaction::None => DEVICE_BUTTON_BG,
             }
             .into();
         }
