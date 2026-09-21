@@ -7,18 +7,23 @@ use crate::scrcpy::{
 
 /// Send a key Down + Up sequence immediately.
 pub fn inject_keycode(cs_tx: &broadcast::Sender<ScrcpyControlMsg>, keycode: Keycode) {
-    let _ = cs_tx.send(ScrcpyControlMsg::InjectKeycode {
+    if let Err(error) = cs_tx.send(ScrcpyControlMsg::InjectKeycode {
         action: KeyEventAction::Down,
         keycode: keycode.clone(),
         repeat: 0,
         metastate: MetaState::NONE,
-    });
-    let _ = cs_tx.send(ScrcpyControlMsg::InjectKeycode {
+    }) {
+        log::error!("[DeviceAction] failed to send key down for {keycode:?}: {error}");
+        return;
+    }
+    if let Err(error) = cs_tx.send(ScrcpyControlMsg::InjectKeycode {
         action: KeyEventAction::Up,
-        keycode,
+        keycode: keycode.clone(),
         repeat: 0,
         metastate: MetaState::NONE,
-    });
+    }) {
+        log::error!("[DeviceAction] failed to send key up for {keycode:?}: {error}");
+    }
 }
 
 /// Turn the device display on (mode: true) or off (mode: false).

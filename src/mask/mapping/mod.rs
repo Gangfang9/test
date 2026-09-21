@@ -30,6 +30,7 @@ use crate::{
             cursor::cleanup_cursor_capture_on_stop,
             cursor::{CursorFrameSet, CursorPlugins, CursorState},
         },
+        ui::basic::ProjectionToolbarCapture,
     },
     utils::relate_to_data_path,
 };
@@ -62,7 +63,8 @@ impl Plugin for MappingPlugins {
             )
             .configure_sets(
                 Update,
-                CursorFrameSet::HandleMappings.run_if(mask_not_resizing),
+                CursorFrameSet::HandleMappings
+                    .run_if(mask_not_resizing.and_then(projection_toolbar_not_capturing)),
             )
             .add_systems(
                 Startup,
@@ -173,6 +175,10 @@ impl Plugin for MappingPlugins {
 
 pub fn mask_not_resizing(resize_state: Res<MaskResizeState>) -> bool {
     !resize_state.active()
+}
+
+fn projection_toolbar_not_capturing(capture: Res<ProjectionToolbarCapture>) -> bool {
+    !capture.active()
 }
 
 fn init(mut ineffable: IneffableCommands, mut active_mapping: ResMut<ActiveMappingConfig>) {

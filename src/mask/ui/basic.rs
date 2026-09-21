@@ -73,11 +73,27 @@ pub enum DeviceAction {
 #[derive(Resource)]
 pub struct MaskContentEntity(pub Entity);
 
+/// Owns a mouse press that started on the projection toolbar until the release
+/// frame has passed. This prevents one physical click from also reaching the
+/// phone touch and mapping systems.
+#[derive(Resource, Default)]
+pub struct ProjectionToolbarCapture {
+    active: bool,
+    release_frame: bool,
+}
+
+impl ProjectionToolbarCapture {
+    pub fn active(&self) -> bool {
+        self.active
+    }
+}
+
 pub struct BasicPlugin;
 
 impl Plugin for BasicPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(ClearColor(Color::NONE))
+            .init_resource::<ProjectionToolbarCapture>()
             .insert_resource(WinitSettings {
                 focused_mode: UpdateMode::Continuous,
                 unfocused_mode: UpdateMode::reactive_low_power(Duration::from_millis(100)),
@@ -87,6 +103,7 @@ impl Plugin for BasicPlugin {
                 Update,
                 (
                     button_interaction,
+                    update_projection_toolbar_capture.in_set(CursorFrameSet::UpdatePosition),
                     handle_titlebar_buttons,
                     handle_device_buttons,
                     handle_titlebar_drag,
@@ -648,6 +665,34 @@ fn handle_device_buttons(
                 device_action::inject_keycode(&cs_tx.0, Keycode::VolumeDown)
             }
         }
+    }
+}
+
+fn update_projection_toolbar_capture(
+    buttons: Query<&Interaction, With<DeviceButton>>,
+    mouse_input: Res<ButtonInput<MouseButton>>,
+    mut capture: ResMut<ProjectionToolbarCapture>,
+) {
+    // Release the capture one frame after the physical release so neither the
+    // Down nor Up edge can leak into the mapping pipeline.
+    if capture.release_frame {
+        capture.active = false;
+        capture.release_frame = false;
+    }
+
+    if buttons
+        .iter()
+        .any(|interaction| *interaction == Interaction::Pressed)
+    {
+        capture.active = true;
+    }
+
+    if capture.active && mouse_input.just_released(MouseButton::Left) {
+        capture.release_frame = true;
+    } else if capture.active && !mouse_input.pressed(MouseButton::Left) {
+        // Also recover if focus loss clears the button state without a normal
+        // release edge.
+        capture.active = false;
     }
 }
 
