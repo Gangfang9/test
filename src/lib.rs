@@ -1,5 +1,6 @@
 pub mod config;
 pub mod mask;
+pub mod membership;
 pub mod scrcpy;
 pub mod tokio_tasks;
 pub mod utils;

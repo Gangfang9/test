@@ -6,6 +6,7 @@ pub mod ws;
 
 use axum::{
     Json, Router,
+    middleware,
     http::{HeaderValue, StatusCode, header},
     response::{IntoResponse, Response},
 };
@@ -21,6 +22,7 @@ use tower_http::{
 };
 
 use crate::{
+    membership,
     mask::mask_command::MaskCommand,
     scrcpy::{control_msg::ScrcpyControlMsg, controller::ControllerCommand},
     utils::relate_to_root_path,
@@ -57,6 +59,7 @@ impl Server {
         ws_tx: broadcast::Sender<WebSocketNotification>,
         open_browser: bool,
     ) {
+        tokio::spawn(membership::heartbeat_loop(d_tx.clone()));
         log::info!("[WebServe] {}: {}", t!("web.server.startingOn"), addr);
 
         let listener = match tokio::net::TcpListener::bind(addr).await {
@@ -127,6 +130,9 @@ impl Server {
             .nest("/api/mapping", mapping::routers(m_tx.clone()))
             .nest("/api/config", config::routers(m_tx.clone()))
             .nest("/api/ws", ws::routers(cs_tx, ws_tx));
+        let router = router
+            .nest("/api/member", membership::router())
+            .layer(middleware::from_fn(membership::require_active));
 
         #[cfg(debug_assertions)]
         {

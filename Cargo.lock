@@ -6218,6 +6218,7 @@ dependencies = [
  "bevy_ineffable",
  "bevy_ui_render",
  "bitflags 2.12.1",
+ "blake3",
  "copypasta",
  "crossbeam-channel",
  "dirs",

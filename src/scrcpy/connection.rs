@@ -122,6 +122,9 @@ impl ScrcpyConnection {
                 loop {
                     match cs_rx.recv().await {
                         Ok(mut msg) => {
+                                if !crate::membership::is_member() {
+                                    continue;
+                                }
                                 // scale position
                                 match &mut msg {
                                     ScrcpyControlMsg::InjectTouchEvent {

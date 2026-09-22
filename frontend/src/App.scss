@@ -118,3 +118,18 @@ body,
     padding: 18px;
   }
 }
+
+.membership-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  box-sizing: border-box;
+  background: linear-gradient(135deg, #f0f6ff 0%, #f9fbff 55%, #eaf3ff 100%);
+}
+
+.membership-card {
+  width: min(100%, 430px);
+  box-shadow: 0 18px 55px rgba(23, 65, 124, 0.1);
+}

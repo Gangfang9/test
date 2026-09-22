@@ -236,6 +236,9 @@ async fn handle_recv(
     cs_tx: broadcast::Sender<ScrcpyControlMsg>,
 ) {
     while let Some(Ok(msg)) = receiver.next().await {
+        if !crate::membership::is_member() {
+            break;
+        }
         match msg {
             Message::Text(t) => {
                 let msg: WebSocketMsg = match serde_json::from_str(&t) {

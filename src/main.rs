@@ -123,6 +123,12 @@ fn main() {
     LocalConfig::prefer_bundled_adb();
 
     let mut local_config = LocalConfig::get();
+    // The desktop UI and membership endpoints carry local session state.
+    // A saved 0.0.0.0 setting must never expose them on the LAN.
+    if !local_config.web_bind_addr.is_loopback() {
+        LocalConfig::set_web_bind_addr(Ipv4Addr::LOCALHOST);
+        local_config = LocalConfig::get();
+    }
     // update language
     let language = local_config.language.clone();
     if is_available_language(&language) {
@@ -215,6 +221,11 @@ fn main() {
     }
 
     app.run();
+    // Tell the cloud service that this PC has exited. The local grant is
+    // cleared even if the network is unavailable.
+    if let Ok(runtime) = tokio::runtime::Builder::new_current_thread().enable_all().build() {
+        runtime.block_on(scrcpy_mask::membership::shutdown_logout());
+    }
 }
 
 #[cfg(target_os = "macos")]
