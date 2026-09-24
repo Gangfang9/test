@@ -148,10 +148,21 @@ async fn cloud(path: &str, body: Value, token: Option<&str>) -> Result<Value, Ap
     if let Some(token) = token {
         request = request.bearer_auth(token);
     }
-    let response = request
-        .send()
-        .await
-        .map_err(|_| error(StatusCode::SERVICE_UNAVAILABLE, "无法连接会员服务器"))?;
+    let response = request.send().await.map_err(|request_error| {
+        let category = if request_error.is_timeout() {
+            "timeout"
+        } else if request_error.is_connect() {
+            "connect/dns/tls"
+        } else {
+            "request"
+        };
+        // reqwest's source chain carries the transport/TLS cause. The request
+        // body and authorization header are deliberately never logged.
+        log::warn!(
+            "[Membership] {path} request failed ({category}): {request_error:#}"
+        );
+        error(StatusCode::SERVICE_UNAVAILABLE, "无法连接服务器")
+    })?;
     let status = response.status();
     let reply: GatewayReply = response
         .json()
