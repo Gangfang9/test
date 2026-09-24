@@ -121,18 +121,22 @@ body,
 
 .membership-page {
   height: 100vh;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding: 24px;
-  box-sizing: border-box;
   overflow-y: auto;
-  background: #151515;
+  background: #1f1f1f;
 }
 
-.membership-card {
-  width: min(100%, 430px);
-  min-height: min(632px, calc(100vh - 48px));
+.membership-page .membership-card {
+  width: 100%;
+  min-height: 100%;
   background: #1f1f1f;
+  border: 0;
+  border-radius: 0;
   box-shadow: none;
+
+  .ant-card-body {
+    box-sizing: border-box;
+    max-width: 520px;
+    margin: 0 auto;
+    padding: 48px clamp(24px, calc((100vw - 380px) / 2), 70px);
+  }
 }
