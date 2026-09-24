@@ -7,7 +7,10 @@
 
 use bevy::{
     prelude::*,
-    window::{Monitor, MonitorSelection, PrimaryMonitor, RawHandleWrapper, WindowCloseRequested, WindowPosition, WindowResolution},
+    window::{
+        Monitor, MonitorSelection, PrimaryMonitor, RawHandleWrapper, WindowCloseRequested,
+        WindowPosition, WindowResolution,
+    },
 };
 use std::time::Duration;
 use wry::{
@@ -27,6 +30,7 @@ struct DesktopWebViewState {
     retry_timer: Timer,
     last_size: UVec2,
     last_visible: bool,
+    last_member: Option<bool>,
 }
 
 impl Default for DesktopWebViewState {
@@ -37,6 +41,7 @@ impl Default for DesktopWebViewState {
             retry_timer: Timer::new(Duration::from_millis(500), TimerMode::Repeating),
             last_size: UVec2::ZERO,
             last_visible: false,
+            last_member: None,
         }
     }
 }
@@ -64,17 +69,11 @@ fn exit_when_management_closes(
 fn spawn_management_window(
     mut commands: Commands,
     monitor: Query<&Monitor, With<PrimaryMonitor>>,
+    mut state: NonSendMut<DesktopWebViewState>,
 ) {
-    let (width, height) = monitor
-        .iter()
-        .next()
-        .map(|monitor| {
-            (
-                (monitor.physical_width as f32 * 0.6).round() as u32,
-                (monitor.physical_height as f32 * 0.6).round() as u32,
-            )
-        })
-        .unwrap_or((1152, 648));
+    let member = crate::membership::is_member();
+    let (width, height) = management_window_size(monitor.iter().next(), member);
+    state.last_member = Some(member);
     commands.spawn((
         Window {
             title: "JX手游助手".into(),
@@ -89,6 +88,24 @@ fn spawn_management_window(
         },
         ManagementWindow,
     ));
+}
+
+fn management_window_size(monitor: Option<&Monitor>, member: bool) -> (u32, u32) {
+    let (screen_width, screen_height) = monitor
+        .map(|monitor| (monitor.physical_width, monitor.physical_height))
+        .unwrap_or((1152, 648));
+
+    if member {
+        (
+            (screen_width as f32 * 0.6).round() as u32,
+            (screen_height as f32 * 0.6).round() as u32,
+        )
+    } else {
+        // Keep the membership gate as the only compact window until a valid
+        // member session exists. The projection window remains independently
+        // hidden until the user starts projection.
+        (520.min(screen_width), 680.min(screen_height))
+    }
 }
 
 fn webview_bounds(window: &Window) -> (Rect, UVec2) {
@@ -108,10 +125,27 @@ fn sync_desktop_webview(
     time: Res<Time>,
     mut state: NonSendMut<DesktopWebViewState>,
     mut windows: Query<(&mut Window, &RawHandleWrapper), With<ManagementWindow>>,
+    monitors: Query<&Monitor, With<PrimaryMonitor>>,
 ) {
     let Ok((mut window, raw_handle)) = windows.single_mut() else {
         return;
     };
+
+    let member = crate::membership::is_member();
+    if state.last_member != Some(member) {
+        let (width, height) = management_window_size(monitors.iter().next(), member);
+        window.resolution.set(width as f32, height as f32);
+        window.position = WindowPosition::Centered(MonitorSelection::Primary);
+        state.last_member = Some(member);
+        log::info!(
+            "[DesktopUI] resized management window for {} state",
+            if member {
+                "active member"
+            } else {
+                "membership"
+            }
+        );
+    }
 
     let should_show = true;
     let (bounds, content_size) = webview_bounds(&window);
