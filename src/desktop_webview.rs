@@ -169,6 +169,7 @@ fn sync_desktop_webview(
         match WebViewBuilder::new()
             .with_url(&url)
             .with_bounds(bounds)
+            .with_background_color((21, 21, 21, 255))
             .with_devtools(cfg!(debug_assertions))
             .build_as_child(&handle)
         {
