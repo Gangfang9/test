@@ -98,13 +98,13 @@ fn fingerprint() -> Result<String, String> {
     if macs.is_empty() {
         return Err("没有可用的网卡识别码".into());
     }
-    Ok(format!(
-        "JX-{}",
-        blake3::hash(
-            format!("{}:{}", guid.to_lowercase(), macs.join(",").to_lowercase()).as_bytes()
-        )
-        .to_hex()
-    ))
+    // U验证 accepts at most 64 characters for udid. The full BLAKE3 hex
+    // digest fits that limit and keeps the displayed last eight characters.
+    Ok(blake3::hash(
+        format!("{}:{}", guid.to_lowercase(), macs.join(",").to_lowercase()).as_bytes(),
+    )
+    .to_hex()
+    .to_string())
 }
 #[cfg(not(target_os = "windows"))]
 fn fingerprint() -> Result<String, String> {
