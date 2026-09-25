@@ -20,7 +20,7 @@ use std::{
 };
 use tokio::sync::mpsc::UnboundedSender;
 
-const GATEWAY: &str = "https://www.jxzs.top";
+const GATEWAYS: [&str; 2] = ["https://jxzs.host.mg", "https://www.jxzs.top"];
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(60);
 const HEARTBEAT_GRACE: Duration = Duration::from_secs(90);
 
@@ -138,47 +138,57 @@ async fn cloud(path: &str, body: Value, token: Option<&str>) -> Result<Value, Ap
         .timeout(Duration::from_secs(8))
         .build()
         .map_err(|_| error(StatusCode::SERVICE_UNAVAILABLE, "无法初始化网络连接"))?;
-    let mut request = client
-        .post(format!("{GATEWAY}/v1/{path}"))
-        .json(&body)
-        .header(
-            "X-Device-ID",
-            device_id().map_err(|msg| error(StatusCode::SERVICE_UNAVAILABLE, msg))?,
-        );
-    if let Some(token) = token {
-        request = request.bearer_auth(token);
-    }
-    let response = request.send().await.map_err(|request_error| {
-        let category = if request_error.is_timeout() {
-            "timeout"
-        } else if request_error.is_connect() {
-            "connect/dns/tls"
-        } else {
-            "request"
+    let device = device_id().map_err(|msg| error(StatusCode::SERVICE_UNAVAILABLE, msg))?;
+    for (index, gateway) in GATEWAYS.iter().enumerate() {
+        let mut request = client
+            .post(format!("{gateway}/v1/{path}"))
+            .json(&body)
+            .header("X-Device-ID", device.clone());
+        if let Some(token) = token {
+            request = request.bearer_auth(token);
+        }
+        let response = match request.send().await {
+            Ok(response) => response,
+            Err(request_error) => {
+                let category = if request_error.is_timeout() {
+                    "timeout"
+                } else if request_error.is_connect() {
+                    "connect/dns/tls"
+                } else {
+                    "request"
+                };
+                // A connect failure occurs before the request is sent. Do not
+                // retry ambiguous timeouts or HTTP errors: register and redeem
+                // might already have changed server state.
+                log::warn!(
+                    "[Membership] {path} request to {gateway} failed ({category}): {request_error:#}"
+                );
+                if request_error.is_connect() && index + 1 < GATEWAYS.len() {
+                    continue;
+                }
+                return Err(error(StatusCode::SERVICE_UNAVAILABLE, "无法连接服务器"));
+            }
         };
-        // reqwest's source chain carries the transport/TLS cause. The request
-        // body and authorization header are deliberately never logged.
-        log::warn!("[Membership] {path} request failed ({category}): {request_error:#}");
-        error(StatusCode::SERVICE_UNAVAILABLE, "无法连接服务器")
-    })?;
-    let status = response.status();
-    let reply: GatewayReply = response
-        .json()
-        .await
-        .map_err(|_| error(StatusCode::BAD_GATEWAY, "会员服务器返回格式错误"))?;
-    if !status.is_success() || !reply.ok {
-        return Err(error(
-            if status.is_client_error() {
-                status
-            } else {
-                StatusCode::BAD_GATEWAY
-            },
-            reply.error.unwrap_or_else(|| "会员验证失败".into()),
-        ));
+        let status = response.status();
+        let reply: GatewayReply = response
+            .json()
+            .await
+            .map_err(|_| error(StatusCode::BAD_GATEWAY, "会员服务器返回格式错误"))?;
+        if !status.is_success() || !reply.ok {
+            return Err(error(
+                if status.is_client_error() {
+                    status
+                } else {
+                    StatusCode::BAD_GATEWAY
+                },
+                reply.error.unwrap_or_else(|| "会员验证失败".into()),
+            ));
+        }
+        return reply
+            .data
+            .ok_or_else(|| error(StatusCode::BAD_GATEWAY, "会员服务器缺少数据"));
     }
-    reply
-        .data
-        .ok_or_else(|| error(StatusCode::BAD_GATEWAY, "会员服务器缺少数据"))
+    Err(error(StatusCode::SERVICE_UNAVAILABLE, "无法连接服务器"))
 }
 
 #[derive(Deserialize)]
