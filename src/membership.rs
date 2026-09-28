@@ -3,15 +3,15 @@
 use crate::web::JsonResponse;
 use crate::{scrcpy::controller::ControllerCommand, utils::share::ControlledDevice};
 use axum::{
-    Json, Router,
     body::Body,
     http::{Request, StatusCode},
     middleware::Next,
     response::{IntoResponse, Response},
     routing::{get, post},
+    Json, Router,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::{
     collections::HashSet,
     process::Command,
@@ -20,7 +20,8 @@ use std::{
 };
 use tokio::sync::mpsc::UnboundedSender;
 
-const GATEWAYS: [&str; 2] = ["https://jxzs.host.mg", "https://www.jxzs.top"];
+// Public endpoints are fixed at build time. Never ship cloud administration keys.
+const GATEWAYS: [&str; 1] = ["https://www.jxzs.top"];
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(60);
 const HEARTBEAT_GRACE: Duration = Duration::from_secs(90);
 
@@ -136,6 +137,7 @@ fn success(data: Value) -> Json<JsonResponse> {
 async fn cloud(path: &str, body: Value, token: Option<&str>) -> Result<Value, ApiError> {
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(8))
+        .redirect(reqwest::redirect::Policy::none())
         .build()
         .map_err(|_| error(StatusCode::SERVICE_UNAVAILABLE, "无法初始化网络连接"))?;
     let device = device_id().map_err(|msg| error(StatusCode::SERVICE_UNAVAILABLE, msg))?;
