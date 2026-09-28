@@ -154,6 +154,8 @@ try {
   assert.equal(await evaluate(`!!document.querySelector('.authenticated-app')`), false);
   assert.equal(await evaluate(`document.querySelector('.membership-page').innerText.includes('会员未开通或已到期')`), true);
   assert.equal(await evaluate(`window.__acks.at(-1)?.protectedVisible`), false);
+  await evaluate(`window.dispatchEvent(new CustomEvent('jx-membership-status',{detail:${JSON.stringify({ ...state, member: true, lease_remaining_ms: 0 })}}))`);
+  assert.equal(await evaluate(`!!document.querySelector('.authenticated-app')`), false, 'late already-expired response must never remount protected UI');
   await capture('expired.png');
   // Recharge from expired gate returns to unchanged main page.
   await evaluate(`(() => { const input=document.querySelector('input');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'VALID-CARD');input.dispatchEvent(new Event('input',{bubbles:true})); })()`);

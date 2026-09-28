@@ -41,8 +41,8 @@ class MembershipTests(unittest.TestCase):
             self.expiry += 86400
         return {"code": 0}
 
-    def login(self, device=None):
-        return gateway.login({"account": "testmember", "password": "Test1234",
+    def login(self, device=None, account="testmember"):
+        return gateway.login({"account": account, "password": "Test1234",
                               "device_id": device or self.device}, "127.0.0.1")
 
     def test_login_heartbeat_recharge_share_uverif_expiry(self):
@@ -82,7 +82,7 @@ class MembershipTests(unittest.TestCase):
     def test_relogin_replaces_old_token_and_logout_revokes_current_token(self):
         with patch.object(gateway, "u_request", self.upstream):
             first = self.login()["session"]
-            second = self.login()["session"]
+            second = self.login(account="TESTMEMBER")["session"]
             with self.assertRaises(gateway.GatewayError):
                 gateway.heartbeat(first, self.device)
             gateway.logout(second, self.device)

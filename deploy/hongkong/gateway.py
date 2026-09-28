@@ -244,7 +244,7 @@ def login(body, ip):
         # U验证 alone owns binding/administrator unbinding. Only a successful
         # bound login reaches here. Replace old sessions so an administrator's
         # legitimate device change is not blocked by stale gateway sessions.
-        connection.execute("DELETE FROM sessions WHERE account=?", (account,))
+        connection.execute("DELETE FROM sessions WHERE account=? COLLATE NOCASE", (account,))
         connection.execute(
             "INSERT INTO sessions VALUES (?,?,?,?,?,?,?)",
             (digest(token), u_token, digest(device), account,

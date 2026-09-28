@@ -26,6 +26,11 @@ function App() {
   const acceptStatus = useCallback((status: MembershipStatus) => {
     if (loggingOut.current && status.logged_in) return;
     if ((status.revision ?? 0) < (latest.current?.revision ?? 0)) return;
+    // A status sampled just before expiry may arrive after its lease ends.
+    // Do not briefly remount the protected page while waiting for its timer.
+    if (status.member && !((status.lease_remaining_ms ?? 0) > 0)) {
+      status = { ...status, member: false, lease_remaining_ms: 0 };
+    }
     latest.current = status;
     document.documentElement.dataset.jxMember = String(status.member);
     setMembership(status);
