@@ -104,7 +104,7 @@ fn toggle_pointer(
         }
         pointer.visible = false;
         if let Some(previous) = pointer.restore_mapping.take() {
-            if available {
+            if crate::membership::is_member() && window.visible {
                 next_mapping.set(previous);
             }
         }
