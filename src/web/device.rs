@@ -173,7 +173,7 @@ async fn _control_device(
     let scid = gen_scid();
     let scrcpy_path = relate_to_root_path([
         "assets",
-        &format!("scrcpy-mask-server-v{}", SCRCPY_SERVER_VERSION),
+        &format!("JXZS-server-v{}", SCRCPY_SERVER_VERSION),
     ]);
     let push_device = device_id.clone();
     let push_path = scrcpy_path.to_str().unwrap().to_string();

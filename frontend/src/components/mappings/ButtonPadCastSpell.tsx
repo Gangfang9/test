@@ -1,3 +1,4 @@
+import { bindingLabel } from "./keyCode";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   ButtonBinding,
@@ -47,13 +48,13 @@ function BindText({ text }: { text: string }) {
 }
 
 function PadCastSpellContent({ padBind, bind }: PadCastSpellContentProps) {
-  const bindText = bind.join("+");
+  const bindText = bindingLabel(bind);
   if (padBind.type === "Button") {
     const padBindTexts = {
-      up: padBind.up.join("+"),
-      down: padBind.down.join("+"),
-      left: padBind.left.join("+"),
-      right: padBind.right.join("+"),
+      up: bindingLabel(padBind.up),
+      down: bindingLabel(padBind.down),
+      left: bindingLabel(padBind.left),
+      right: bindingLabel(padBind.right),
     };
 
     return (

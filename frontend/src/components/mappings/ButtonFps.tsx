@@ -1,3 +1,4 @@
+import { bindingLabel } from "./keyCode";
 import { useEffect, useMemo, useState } from "react";
 import type { FpsConfig, FpsTouchMode, MappingUpdater } from "./mapping";
 import { Flex, InputNumber, Select, Space, Tooltip, Typography } from "antd";
@@ -44,7 +45,7 @@ export default function ButtonFps({
   getAvailablePointerId: (reserved?: number[]) => number;
 }) {
   const id = `mapping-fps-${index}`;
-  const bindText = config.bind.length > 0 ? config.bind.join("+") : "???";
+  const bindText = config.bind.length > 0 ? bindingLabel(config.bind) : "???";
   const className =
     "rounded-full absolute box-border border-solid border-2 color-text cursor-move " +
     (config.bind.length > 0

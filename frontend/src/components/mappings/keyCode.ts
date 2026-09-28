@@ -1,3 +1,13 @@
+import keyLabels from "./keyLabels.json";
+
+export function keyLabel(key: string): string {
+  return (keyLabels as Record<string, string>)[key] ?? key;
+}
+
+export function bindingLabel(bind: string[]): string {
+  return bind.map(keyLabel).join("+");
+}
+
 export const EVENT_CODE_TO_KEY_CODE = {
   // 3.1.1.1. Writing System Keys
   Backquote: "Backquote",

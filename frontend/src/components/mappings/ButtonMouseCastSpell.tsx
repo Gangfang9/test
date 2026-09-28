@@ -1,3 +1,4 @@
+import { bindingLabel } from "./keyCode";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { MappingUpdater, MouseCastSpellConfig, Position } from "./mapping";
 import {
@@ -83,7 +84,7 @@ export default function ButtonMouseCastSpell({
   onConfigCopy: () => void;
 }) {
   const id = `mapping-mouse-cast-spell-${index}`;
-  const bindText = config.bind.length > 0 ? config.bind.join("+") : "???";
+  const bindText = config.bind.length > 0 ? bindingLabel(config.bind) : "???";
   const className =
     "rounded-full absolute box-border border-solid border-2 color-text " +
     (config.bind.length > 0

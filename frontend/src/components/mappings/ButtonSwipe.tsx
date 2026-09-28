@@ -1,3 +1,4 @@
+import { bindingLabel } from "./keyCode";
 import { useEffect, useMemo, useState } from "react";
 import type { MappingUpdater, SwipeConfig } from "./mapping";
 import { Button, Flex, InputNumber, Popover, Space, Switch, Tooltip, Typography } from "antd";
@@ -48,7 +49,7 @@ export default function ButtonSwipe({
   onConfigCopy: () => void;
 }) {
   const id = `mapping-single-tap-${index}`;
-  const bindText = config.bind.length > 0 ? config.bind.join("+") : "???";
+  const bindText = config.bind.length > 0 ? bindingLabel(config.bind) : "???";
   const className =
     "rounded-full absolute box-border border-solid border-2 color-text " +
     (config.bind.length > 0

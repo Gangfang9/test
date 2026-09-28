@@ -1,3 +1,4 @@
+import { bindingLabel } from "./keyCode";
 import { useEffect, useMemo, useState } from "react";
 import type { MappingUpdater, ObservationConfig } from "./mapping";
 import { Flex, InputNumber, Space, Tooltip, Typography } from "antd";
@@ -41,7 +42,7 @@ export default function ButtonObservation({
   onConfigCopy: () => void;
 }) {
   const id = `mapping-single-tap-${index}`;
-  const bindText = config.bind.length > 0 ? config.bind.join("+") : "???";
+  const bindText = config.bind.length > 0 ? bindingLabel(config.bind) : "???";
   const className =
     "rounded-full absolute box-border border-solid border-2 color-text " +
     (config.bind.length > 0

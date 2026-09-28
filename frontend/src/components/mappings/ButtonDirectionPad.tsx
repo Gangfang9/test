@@ -1,3 +1,4 @@
+import { bindingLabel } from "./keyCode";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   DirectionBinding,
@@ -53,10 +54,10 @@ function BindText({ text }: { text: string }) {
 function DirectionPadContent({ bind }: DirectionPadContentProps) {
   if (bind.type === "Button") {
     const bindTexts = {
-      up: bind.up.join("+"),
-      down: bind.down.join("+"),
-      left: bind.left.join("+"),
-      right: bind.right.join("+"),
+      up: bindingLabel(bind.up),
+      down: bindingLabel(bind.down),
+      left: bindingLabel(bind.left),
+      right: bindingLabel(bind.right),
     };
 
     return (

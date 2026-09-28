@@ -1,3 +1,4 @@
+import { bindingLabel, keyLabel } from "./keyCode";
 import {
   EditOutlined,
   CloseCircleOutlined,
@@ -414,7 +415,7 @@ function AutoInputBinding({
   return (
     <Input
       ref={inputRef}
-      value={bind.join("+")}
+      value={bindingLabel(bind)}
       placeholder={t("mappings.common.bind.autoInputPlaceholder")}
       readOnly
       onDoubleClick={() => {
@@ -444,7 +445,7 @@ function AutoInputBinding({
 
 const KeyNameOptions: SelectProps["options"] = KEY_NAMES.map((v) => ({
   value: v,
-  label: v,
+  label: keyLabel(v),
 }));
 
 function ManualInputBinding({
@@ -464,6 +465,8 @@ function ManualInputBinding({
       value={bind}
       onChange={(v) => onBindChange(v)}
       options={KeyNameOptions}
+      optionFilterProp="label"
+      optionRender={(option) => <span title={String(option.value)}>{option.label}</span>}
     />
   );
 }

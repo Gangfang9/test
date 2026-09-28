@@ -213,7 +213,7 @@ fn create_simple_label(
                 background_color: BackgroundColor(label_background_color(opacity)),
             },
             children![(
-                Text::new(binding),
+                Text::new(display_binding(binding)),
                 TextFont {
                     font_size: FontSize::Px(12.),
                     ..default()
@@ -226,7 +226,7 @@ fn create_simple_label(
 
 fn text_node(binding: &str, opacity: f32) -> (Text, TextFont, TextColor) {
     (
-        Text::new(binding),
+        Text::new(display_binding(binding)),
         TextFont {
             font_size: FontSize::Px(12.),
             ..default()
@@ -363,4 +363,51 @@ fn create_pad_label(
                 };
             });
     });
+}
+
+// Presentation only: serialized bindings and input matching retain original codes.
+fn display_binding(binding: &str) -> String {
+    static LABELS: std::sync::LazyLock<std::collections::HashMap<String, String>> =
+        std::sync::LazyLock::new(|| {
+            serde_json::from_str(include_str!(
+                "../../../frontend/src/components/mappings/keyLabels.json"
+            ))
+            .expect("valid keyboard display labels")
+        });
+    binding
+        .split('+')
+        .map(|key| LABELS.get(key).map(String::as_str).unwrap_or(key))
+        .collect::<Vec<_>>()
+        .join("+")
+}
+
+// Presentation only; input codes and saved bindings stay unchanged.
+fn display_binding(binding: &str) -> String {
+    static LABELS: std::sync::LazyLock<std::collections::HashMap<String, String>> =
+        std::sync::LazyLock::new(|| {
+            serde_json::from_str(include_str!(
+                "../../../frontend/src/components/mappings/keyLabels.json"
+            ))
+            .expect("valid keyboard display labels")
+        });
+    binding
+        .split('+')
+        .map(|key| LABELS.get(key).map(String::as_str).unwrap_or(key))
+        .collect::<Vec<_>>()
+        .join("+")
+}
+
+#[cfg(test)]
+mod display_tests {
+    use super::display_binding;
+    #[test]
+    fn keyboard_labels_preserve_binding_codes() {
+        assert_eq!(display_binding("KeyW+Digit6"), "W+6");
+        assert_eq!(display_binding("ControlLeft+KeyA"), "Ctrl+A");
+        assert_eq!(display_binding("Backquote"), "`");
+        assert_eq!(display_binding("NumpadAdd"), "+");
+        assert_eq!(display_binding("ArrowUp"), "↑");
+        assert_eq!(display_binding("M-Left"), "M-Left");
+        assert_eq!(display_binding("Unknown"), "Unknown");
+    }
 }
