@@ -10,6 +10,19 @@ body,
   z-index: 9999;
 }
 
+// Native expiry closes the protected view before the compact window resize.
+html[data-jx-member="false"] .authenticated-app {
+  visibility: hidden;
+}
+
+.membership-toolbar {
+  flex-wrap: wrap;
+
+  .ant-typography {
+    white-space: nowrap;
+  }
+}
+
 .ant-form-item-label {
   font-weight: bold;
 }

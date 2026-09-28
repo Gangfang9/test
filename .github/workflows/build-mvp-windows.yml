@@ -47,6 +47,10 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Check membership gateway
+        shell: pwsh
+        run: python -m unittest discover -s deploy/hongkong -p test_gateway.py -v
+
       - name: Set up MSVC
         uses: ilammy/msvc-dev-cmd@v1
 
@@ -146,6 +150,10 @@ jobs:
               }
             exit $packageExitCode
           }
+
+      - name: Check membership UI transitions
+        shell: pwsh
+        run: node frontend/tests/membership-ui.mjs
 
       - name: Upload JX手游助手
         uses: actions/upload-artifact@v4

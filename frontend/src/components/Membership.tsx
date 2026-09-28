@@ -1,19 +1,24 @@
 import { Alert, Button, Card, Form, Input, Space, Tabs, Typography, message } from "antd";
 import { useState } from "react";
 import { requestPost } from "../utils";
+import { formatMembershipExpiry } from "../membershipPresentation";
 
 export type MembershipStatus = {
   logged_in: boolean;
   member: boolean;
   account?: string;
   device_suffix?: string;
+  membership_expires_at?: number | null;
+  lease_remaining_ms?: number;
+  revision?: number;
 };
 
 type Credentials = { account: string; password: string };
 
-export default function Membership({ status, onChange }: {
+export default function Membership({ status, onChange, onLogout }: {
   status: MembershipStatus;
   onChange: (status: MembershipStatus) => void;
+  onLogout: () => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
@@ -84,17 +89,15 @@ export default function Membership({ status, onChange }: {
       {error && <Alert type="error" showIcon message={error} style={{ marginTop: 16 }} />}
       {status.logged_in ? <div style={{ marginTop: 24 }}>
         <Typography.Paragraph>账号：{status.account}</Typography.Paragraph>
+        <Typography.Paragraph type="secondary">到期：{formatMembershipExpiry(status.membership_expires_at)}（北京时间）</Typography.Paragraph>
         <Alert type="warning" showIcon message="会员未开通或已到期" description="充值有效卡密后才能使用投屏和键鼠映射。" />
         <Form form={cardForm} layout="vertical" onFinish={(values) => submit("redeem", values)} style={{ marginTop: 20 }}>
           <Form.Item label="卡密" name="card" rules={[{ required: true, message: "请输入卡密" }]}>
             <Input autoComplete="off" maxLength={128} placeholder="输入天卡、周卡或月卡卡密" />
           </Form.Item>
           <Space>
-            <Button type="primary" htmlType="submit" loading={busy}>充值并验证</Button>
-            <Button disabled={busy} onClick={async () => {
-              try { const result = await requestPost<MembershipStatus>("/api/member/logout", {}); onChange(result.data); }
-              catch { onChange({ logged_in: false, member: false }); }
-            }}>退出登录</Button>
+            <Button type="primary" htmlType="submit" loading={busy}>卡密充值</Button>
+            <Button disabled={busy} onClick={onLogout}>退出登录</Button>
           </Space>
         </Form>
       </div> : <Tabs activeKey={activeTab} onChange={setActiveTab} style={{ marginTop: 20 }} items={[

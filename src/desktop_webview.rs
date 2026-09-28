@@ -12,7 +12,10 @@ use bevy::{
         WindowPosition, WindowResolution,
     },
 };
-use std::time::Duration;
+use std::{
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 use wry::{
     Rect, WebView, WebViewBuilder,
     dpi::{PhysicalPosition, PhysicalSize},
@@ -31,6 +34,8 @@ struct DesktopWebViewState {
     last_size: UVec2,
     last_visible: bool,
     last_member: Option<bool>,
+    last_published: Option<(u64, bool)>,
+    presentation: Arc<Mutex<Option<(u64, bool)>>>,
 }
 
 impl Default for DesktopWebViewState {
@@ -42,6 +47,8 @@ impl Default for DesktopWebViewState {
             last_size: UVec2::ZERO,
             last_visible: false,
             last_member: None,
+            last_published: None,
+            presentation: Arc::new(Mutex::new(None)),
         }
     }
 }
@@ -131,8 +138,27 @@ fn sync_desktop_webview(
         return;
     };
 
-    let member = crate::membership::is_member();
-    if state.last_member != Some(member) {
+    let snapshot = crate::membership::local_status();
+    let member = snapshot["member"].as_bool().unwrap_or(false);
+    let revision = snapshot["revision"].as_u64().unwrap_or(0);
+    let presentation_key = (revision, member);
+    if let Some(webview) = state.webview.as_ref() {
+        if state.last_published != Some(presentation_key) {
+            // Hide protected DOM before React handles expiry/logout. Resize
+            // only after React confirms the replacement view has painted.
+            let script = format!(
+                "document.documentElement.dataset.jxMember='{member}';window.dispatchEvent(new CustomEvent('jx-membership-status',{{detail:{snapshot}}}));"
+            );
+            if webview.evaluate_script(&script).is_ok() {
+                state.last_published = Some(presentation_key);
+            }
+        }
+    }
+    let rendered = *state
+        .presentation
+        .lock()
+        .expect("presentation lock poisoned");
+    if state.last_member != Some(member) && rendered == Some(presentation_key) {
         let (width, height) = management_window_size(monitors.iter().next(), member);
         window.resolution.set(width as f32, height as f32);
         window.position = WindowPosition::Centered(MonitorSelection::Primary);
@@ -166,11 +192,25 @@ fn sync_desktop_webview(
         // SAFETY: this system is forced onto Bevy's main thread by NonSendMut,
         // which is the thread on which the primary Windows handle is valid.
         let handle = unsafe { raw_handle.get_handle() };
+        let presentation = Arc::clone(&state.presentation);
         match WebViewBuilder::new()
             .with_url(&url)
             .with_bounds(bounds)
             .with_background_color((31, 31, 31, 255))
             .with_devtools(cfg!(debug_assertions))
+            .with_ipc_handler(move |request| {
+                let Ok(message) = serde_json::from_str::<serde_json::Value>(request.body()) else {
+                    return;
+                };
+                if message["kind"] == "membership-rendered" {
+                    if let (Some(revision), Some(member)) =
+                        (message["revision"].as_u64(), message["member"].as_bool())
+                    {
+                        *presentation.lock().expect("presentation lock poisoned") =
+                            Some((revision, member));
+                    }
+                }
+            })
             .build_as_child(&handle)
         {
             Ok(webview) => {

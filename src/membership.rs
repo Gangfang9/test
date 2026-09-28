@@ -3,15 +3,15 @@
 use crate::web::JsonResponse;
 use crate::{scrcpy::controller::ControllerCommand, utils::share::ControlledDevice};
 use axum::{
+    Json, Router,
     body::Body,
     http::{Request, StatusCode},
     middleware::Next,
     response::{IntoResponse, Response},
     routing::{get, post},
-    Json, Router,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::{
     collections::HashSet,
     process::Command,
@@ -31,19 +31,52 @@ struct Session {
     account: Option<String>,
     member: bool,
     checked: Option<Instant>,
+    expires_at: Option<i64>,
+    deadline: Option<Instant>,
+    revision: u64,
+    generation: u64,
 }
 static SESSION: OnceLock<RwLock<Session>> = OnceLock::new();
 static DEVICE_ID: OnceLock<Result<String, String>> = OnceLock::new();
+static OPERATIONS: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 fn session() -> &'static RwLock<Session> {
     SESSION.get_or_init(|| RwLock::new(Session::default()))
 }
 
 pub fn is_member() -> bool {
     let state = session().read().expect("membership lock poisoned");
-    state.member
-        && state
-            .checked
-            .is_some_and(|at| at.elapsed() < HEARTBEAT_GRACE)
+    state.active()
+}
+
+impl Session {
+    fn active(&self) -> bool {
+        self.token.is_some()
+            && self.member
+            && self.deadline.is_some_and(|at| Instant::now() < at)
+            && self
+                .checked
+                .is_some_and(|at| at.elapsed() < HEARTBEAT_GRACE)
+    }
+
+    fn apply(&mut self, data: &Value, started: Instant) {
+        self.expires_at = data.get("membership_expires_at").and_then(Value::as_i64);
+        self.deadline = data
+            .get("server_time")
+            .and_then(Value::as_f64)
+            .zip(self.expires_at)
+            .and_then(|(server_time, expiry)| {
+                let remaining = expiry as f64 - server_time;
+                if remaining.is_finite() && remaining > 0.0 {
+                    started.checked_add(Duration::try_from_secs_f64(remaining).ok()?)
+                } else {
+                    None
+                }
+            });
+        self.member =
+            data.get("member").and_then(Value::as_bool).unwrap_or(false) && self.deadline.is_some();
+        self.checked = Some(Instant::now());
+        self.revision += 1;
+    }
 }
 
 #[cfg(target_os = "windows")]
@@ -208,17 +241,30 @@ struct LocalStatus {
     member: bool,
     account: Option<String>,
     device_suffix: Option<String>,
+    membership_expires_at: Option<i64>,
+    lease_remaining_ms: u64,
+    revision: u64,
 }
-fn local_status() -> Value {
+pub fn local_status() -> Value {
     let state = session().read().expect("membership lock poisoned");
     json!(LocalStatus {
         logged_in: state.token.is_some(),
-        member: state.member
-            && state
-                .checked
-                .is_some_and(|at| at.elapsed() < HEARTBEAT_GRACE),
+        member: state.active(),
         account: state.account.clone(),
         device_suffix: device_id().ok().map(|id| id[id.len() - 8..].to_string()),
+        membership_expires_at: state.expires_at,
+        lease_remaining_ms: if state.active() {
+            state
+                .deadline
+                .map(|at| at.saturating_duration_since(Instant::now()))
+                .unwrap_or_default()
+                .min(HEARTBEAT_GRACE.saturating_sub(state.checked.unwrap().elapsed()))
+                .as_millis()
+                .min(u64::MAX as u128) as u64
+        } else {
+            0
+        },
+        revision: state.revision,
     })
 }
 async fn status() -> Json<JsonResponse> {
@@ -229,19 +275,40 @@ async fn register(Json(input): Json<Credentials>) -> ApiResult {
     Ok(success(data))
 }
 async fn login(Json(input): Json<Credentials>) -> ApiResult {
+    let generation = {
+        let mut state = session().write().expect("membership lock poisoned");
+        state.generation += 1;
+        state.generation
+    };
+    let _operation = OPERATIONS.lock().await;
+    if session()
+        .read()
+        .expect("membership lock poisoned")
+        .generation
+        != generation
+    {
+        return Err(error(StatusCode::CONFLICT, "登录已取消，请重新登录"));
+    }
+    let started = Instant::now();
     let data = cloud("login", json!({"account":input.account,"password":input.password,"device_id":device_id().map_err(|msg| error(StatusCode::SERVICE_UNAVAILABLE,msg))?}), None).await?;
     let token = data
         .get("session")
         .and_then(Value::as_str)
         .filter(|s| s.len() >= 32)
         .ok_or_else(|| error(StatusCode::BAD_GATEWAY, "登录响应缺少会话"))?;
-    let member = data.get("member").and_then(Value::as_bool).unwrap_or(false);
     {
         let mut state = session().write().expect("membership lock poisoned");
+        if state.generation != generation {
+            // Logout must never be undone by a delayed login response.
+            let cancelled_token = token.to_string();
+            tokio::spawn(async move {
+                let _ = cloud("logout", json!({}), Some(&cancelled_token)).await;
+            });
+            return Err(error(StatusCode::CONFLICT, "登录已取消，请重新登录"));
+        }
         state.token = Some(token.to_string());
         state.account = Some(input.account);
-        state.member = member;
-        state.checked = Some(Instant::now());
+        state.apply(&data, started);
     }
     Ok(success(local_status()))
 }
@@ -252,13 +319,21 @@ async fn redeem(Json(input): Json<Card>) -> ApiResult {
         .token
         .clone()
         .ok_or_else(|| error(StatusCode::UNAUTHORIZED, "请先登录"))?;
-    cloud("redeem", json!({"card":input.card}), Some(&token)).await?;
-    let data = cloud("heartbeat", json!({}), Some(&token)).await?;
-    let member = data.get("member").and_then(Value::as_bool).unwrap_or(false);
+    let _operation = OPERATIONS.lock().await;
+    if session()
+        .read()
+        .expect("membership lock poisoned")
+        .token
+        .as_deref()
+        != Some(&token)
+    {
+        return Err(error(StatusCode::UNAUTHORIZED, "请重新登录"));
+    }
+    let started = Instant::now();
+    let data = cloud("redeem", json!({"card":input.card}), Some(&token)).await?;
     let mut state = session().write().expect("membership lock poisoned");
     if state.token.as_deref() == Some(&token) {
-        state.member = member;
-        state.checked = Some(Instant::now());
+        state.apply(&data, started);
     }
     drop(state);
     Ok(success(local_status()))
@@ -269,20 +344,28 @@ async fn logout() -> Json<JsonResponse> {
         state.account = None;
         state.member = false;
         state.checked = None;
+        state.expires_at = None;
+        state.deadline = None;
+        state.generation += 1;
+        state.revision += 1;
         state.token.take()
     };
     if let Some(token) = token {
-        let _ = cloud("logout", json!({}), Some(&token)).await;
+        tokio::spawn(async move {
+            let _ = cloud("logout", json!({}), Some(&token)).await;
+        });
     }
     success(local_status())
 }
 pub async fn refresh() {
+    let _operation = OPERATIONS.lock().await;
     let token = session()
         .read()
         .expect("membership lock poisoned")
         .token
         .clone();
     let Some(token) = token else { return };
+    let started = Instant::now();
     let result = cloud("heartbeat", json!({}), Some(&token)).await;
     let mut state = session().write().expect("membership lock poisoned");
     if state.token.as_deref() != Some(&token) {
@@ -290,12 +373,19 @@ pub async fn refresh() {
     }
     match result {
         Ok(data) => {
-            state.member = data.get("member").and_then(Value::as_bool).unwrap_or(false);
-            state.checked = Some(Instant::now());
+            state.apply(&data, started);
         }
-        Err(_) => {
+        Err((status, _)) => {
             state.member = false;
             state.checked = None;
+            state.revision += 1;
+            if status == StatusCode::UNAUTHORIZED {
+                state.token = None;
+                state.account = None;
+                state.expires_at = None;
+                state.deadline = None;
+                state.generation += 1;
+            }
         }
     }
 }
@@ -303,9 +393,10 @@ pub async fn heartbeat_loop(shutdown_tx: UnboundedSender<ControllerCommand>) {
     let mut last_check = Instant::now();
     let mut shutdown_sent = HashSet::new();
     loop {
-        tokio::time::sleep(Duration::from_secs(5)).await;
+        tokio::time::sleep(Duration::from_millis(250)).await;
         if last_check.elapsed() >= HEARTBEAT_INTERVAL {
-            refresh().await;
+            // Network delays must not delay stopping expired projection.
+            tokio::spawn(refresh());
             last_check = Instant::now();
         }
         if is_member() {
@@ -340,4 +431,90 @@ pub async fn require_active(request: Request<Body>, next: Next) -> Response {
         return error(StatusCode::FORBIDDEN, "会员未开通或验证已失效").into_response();
     }
     next.run(request).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn verified(remaining: f64) -> Value {
+        json!({"member": true, "membership_expires_at": 2000,
+               "server_time": 2000.0 - remaining})
+    }
+
+    #[test]
+    fn server_deadline_closes_expired_membership_without_waiting_for_heartbeat() {
+        let mut state = Session {
+            token: Some("test-session".into()),
+            ..Default::default()
+        };
+        state.apply(&verified(0.5), Instant::now() - Duration::from_secs(1));
+        assert!(
+            !state.active(),
+            "a fresh heartbeat cannot extend actual expiry"
+        );
+        state.apply(&verified(3600.0), Instant::now());
+        assert!(state.active());
+        state.checked = Some(Instant::now() - HEARTBEAT_GRACE);
+        assert!(
+            !state.active(),
+            "cloud verification cannot be used indefinitely offline"
+        );
+    }
+
+    #[test]
+    fn missing_or_invalid_cloud_expiry_never_grants_membership() {
+        for data in [
+            json!({"member":true}),
+            json!({"member":true,"membership_expires_at":2000,"server_time":2001}),
+            json!({"member":false,"membership_expires_at":2000,"server_time":1000}),
+        ] {
+            let mut state = Session {
+                token: Some("test-session".into()),
+                ..Default::default()
+            };
+            state.apply(&data, Instant::now());
+            assert!(!state.active());
+        }
+    }
+
+    #[test]
+    fn verified_recharge_replaces_expiry_and_offline_deadline() {
+        let mut state = Session {
+            token: Some("test-session".into()),
+            ..Default::default()
+        };
+        state.apply(&verified(1.0), Instant::now());
+        let old_deadline = state.deadline.unwrap();
+        state.apply(
+            &json!({"member":true,"membership_expires_at":3000,"server_time":1999}),
+            Instant::now(),
+        );
+        assert_eq!(state.expires_at, Some(3000));
+        assert!(state.deadline.unwrap() > old_deadline);
+        assert!(state.active());
+    }
+
+    #[tokio::test]
+    async fn logout_revokes_locally_without_waiting_for_cloud() {
+        let _ = DEVICE_ID.set(Ok("a".repeat(64)));
+        {
+            let mut state = session().write().unwrap();
+            state.token = Some("test-token-not-sent-before-runtime-shutdown".into());
+            state.account = Some("testmember".into());
+            state.apply(&verified(3600.0), Instant::now());
+        }
+        assert!(is_member());
+        let generation = session().read().unwrap().generation;
+        let result = tokio::time::timeout(Duration::from_millis(100), logout())
+            .await
+            .unwrap();
+        assert!(!is_member());
+        assert_eq!(result.0.data.as_ref().unwrap()["logged_in"], false);
+        assert_eq!(result.0.data.as_ref().unwrap()["member"], false);
+        assert!(
+            session().read().unwrap().generation > generation,
+            "pending login responses must be cancelled by logout"
+        );
+    }
 }
