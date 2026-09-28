@@ -381,22 +381,6 @@ fn display_binding(binding: &str) -> String {
         .join("+")
 }
 
-// Presentation only; input codes and saved bindings stay unchanged.
-fn display_binding(binding: &str) -> String {
-    static LABELS: std::sync::LazyLock<std::collections::HashMap<String, String>> =
-        std::sync::LazyLock::new(|| {
-            serde_json::from_str(include_str!(
-                "../../../frontend/src/components/mappings/keyLabels.json"
-            ))
-            .expect("valid keyboard display labels")
-        });
-    binding
-        .split('+')
-        .map(|key| LABELS.get(key).map(String::as_str).unwrap_or(key))
-        .collect::<Vec<_>>()
-        .join("+")
-}
-
 #[cfg(test)]
 mod display_tests {
     use super::display_binding;
