@@ -42,10 +42,10 @@ else:
     raise AssertionError('Start-service button not found')
 time.sleep(1)
 port = int(adb('forward', 'tcp:0', 'localabstract:jxzs_cursor_v1').strip())
-connection = socket.create_connection(('127.0.0.1', port), timeout=3)
-assert connection.makefile('rb').readline() == b'JXZS/1\n', 'ADB peer handshake failed'
 base = screenshot('hidden')
 w, h = base.size
+connection = socket.create_connection(('127.0.0.1', port), timeout=3)
+assert connection.makefile('rb').readline() == b'JXZS/1\n', 'ADB peer handshake failed'
 frame = {'v': 1, 'visible': False, 'x': 0.25, 'y': 0.4, 'width': w, 'height': h}
 lock = threading.Lock()
 running = True
@@ -64,6 +64,8 @@ base = screenshot('connected-hidden')
 with lock: frame['visible'] = True
 time.sleep(0.3)
 visible = screenshot('visible')
+for name, args in [('window.txt', ('dumpsys', 'window', 'windows')), ('logcat.txt', ('logcat', '-d', '-s', 'JXZSPointer:V', 'AndroidRuntime:E'))]:
+    (OUT / name).write_bytes(adb('shell', *args))
 cx, cy = round(w*0.25), round(h*0.4)
 roi = (max(0,cx-3), max(0,cy-3), min(w,cx+100), min(h,cy+120))
 assert ImageChops.difference(base.crop(roi), visible.crop(roi)).getbbox(), 'Arrow absent at normalized hotspot'

@@ -26,7 +26,6 @@ import org.json.JSONObject;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -38,6 +37,7 @@ public final class CursorService extends Service {
     private volatile boolean running;
     private volatile LocalServerSocket server;
     private volatile LocalSocket client;
+    private volatile long lastPacketAt;
     private Thread worker;
     private WindowManager windows;
     private CursorView cursor;
@@ -87,16 +87,17 @@ public final class CursorService extends Service {
             while (running) {
                 try (LocalSocket socket = listener.accept()) {
                     client = socket;
+                    lastPacketAt = SystemClock.elapsedRealtime();
                     // Only local ADB (shell/root UID) may feed the cursor.
                     // No TCP listener, INTERNET permission, or public port.
                     int uid = socket.getPeerCredentials().getUid();
                     if (uid != 2000 && uid != 0) continue;
-                    socket.setSoTimeout(500);
                     socket.getOutputStream().write("JXZS/1\n".getBytes(StandardCharsets.US_ASCII));
                     socket.getOutputStream().flush();
                     status = "电脑已连接 · 按 · 键显示鼠标";
                     receive(socket.getInputStream());
                 } catch (IOException | RuntimeException error) {
+                    if (running) android.util.Log.w("JXZSPointer", "USB pointer connection ended", error);
                     if (running) status = "等待电脑重新连接";
                 } finally { client = null; latest.set(null); }
             }
@@ -106,14 +107,8 @@ public final class CursorService extends Service {
 
     private void receive(InputStream input) throws IOException {
         ByteArrayOutputStream line = new ByteArrayOutputStream(256);
-        long lastPacket = SystemClock.elapsedRealtime();
         while (running) {
-            int value;
-            try { value = input.read(); }
-            catch (SocketTimeoutException timeout) {
-                if (SystemClock.elapsedRealtime() - lastPacket > 2000) return;
-                continue;
-            }
+            int value = input.read();
             if (value < 0) return;
             if (value != '\n') {
                 if (line.size() >= 512) throw new IOException("Pointer frame too long");
@@ -124,7 +119,7 @@ public final class CursorService extends Service {
                 PointerFrame frame = new PointerFrame(json.getInt("v"), json.getBoolean("visible"),
                         json.getDouble("x"), json.getDouble("y"), json.getDouble("width"), json.getDouble("height"),
                         SystemClock.elapsedRealtime());
-                latest.set(frame); lastPacket = frame.receivedAt;
+                latest.set(frame); lastPacketAt = frame.receivedAt;
             } catch (Exception invalid) { throw new IOException("Invalid pointer packet", invalid); }
             line.reset();
         }
@@ -133,6 +128,12 @@ public final class CursorService extends Service {
     private final Runnable render = new Runnable() {
         @Override public void run() {
             if (!running) return;
+            // LocalSocket read timeouts can surface as plain IOException on
+            // Android. Close stale peers from the UI watchdog instead.
+            LocalSocket peer = client;
+            if (peer != null && SystemClock.elapsedRealtime() - lastPacketAt > 2000) {
+                try { peer.close(); } catch (IOException ignored) { }
+            }
             if (!Settings.canDrawOverlays(CursorService.this)) { status = "悬浮窗权限已关闭"; stopSelf(); return; }
             PointerFrame frame = latest.get();
             windows.getDefaultDisplay().getRealMetrics(metrics);
