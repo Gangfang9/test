@@ -10,13 +10,14 @@ use bevy::{
     app::{App, Plugin, Startup, Update},
     ecs::{
         message::MessageReader,
-        system::{Commands, Local, Res, ResMut, Single},
+        system::{Commands, Local, Query, Res, ResMut, Single},
     },
     math::Vec2,
     prelude::{ButtonInput, Entity, IntoScheduleConfigs, MouseButton, Resource, SystemSet, With},
     time::{Time, Timer, TimerMode},
     window::{
-        PrimaryWindow, Window, WindowCloseRequested, WindowMoved, WindowPosition, WindowResized,
+        Monitor, PrimaryWindow, Window, WindowCloseRequested, WindowMoved, WindowPosition,
+        WindowResized,
     },
 };
 use bevy_ui_render::prelude::UiMaterialPlugin;
@@ -27,7 +28,7 @@ use crate::{
         mapping::cursor::CursorFrameSet,
         mask_command::{
             MaskSize, PendingWindowFocus, TitlebarState, apply_pending_window_focus,
-            handle_mask_command, physical_to_logical_i32,
+            handle_mask_command, physical_to_logical_i32, titlebar_reachable,
         },
         ui::basic::TITLEBAR_HEIGHT,
         video::{YuvVideoMaterial, handle_video_msg},
@@ -201,6 +202,7 @@ fn sync_mask_size(
     mouse_input: Res<ButtonInput<MouseButton>>,
     mut resize_state: ResMut<MaskResizeState>,
     ws_tx: Res<ChannelSenderWS>,
+    monitors: Query<&Monitor>,
 ) {
     let (window_entity, mut window) = window.into_inner();
     for e in resize_reader.read() {
@@ -248,6 +250,9 @@ fn sync_mask_size(
             let WindowPosition::At(pos) = window.position else {
                 return;
             };
+            if !window_position_can_be_saved(&window, pos, &monitors) {
+                return;
+            }
             let scale_factor = window.resolution.scale_factor() as f32;
             let content_top = if titlebar_state.visible {
                 physical_to_logical_i32(pos.y, scale_factor) + TITLEBAR_HEIGHT.round() as i32
@@ -283,6 +288,7 @@ fn sync_mask_position(
     time: Res<Time>,
     mut debounce: Local<MoveDebounce>,
     ws_tx: Res<ChannelSenderWS>,
+    monitors: Query<&Monitor>,
 ) {
     let (window_entity, window) = window.into_inner();
     debounce.ensure_init();
@@ -307,6 +313,9 @@ fn sync_mask_position(
                 let WindowPosition::At(pos) = window.position else {
                     return;
                 };
+                if !window_position_can_be_saved(window, pos, &monitors) {
+                    return;
+                }
                 let scale_factor = window.resolution.scale_factor() as f32;
                 let content_top = if titlebar_state.visible {
                     physical_to_logical_i32(pos.y, scale_factor) + TITLEBAR_HEIGHT.round() as i32
@@ -332,4 +341,23 @@ fn sync_mask_position(
             }
         }
     }
+}
+
+fn window_position_can_be_saved(
+    window: &Window,
+    position: bevy::math::IVec2,
+    monitors: &Query<&Monitor>,
+) -> bool {
+    window.visible
+        && monitors.iter().any(|monitor| {
+            titlebar_reachable(
+                position.x,
+                position.y,
+                window.resolution.physical_width() as i32,
+                monitor.physical_position.x,
+                monitor.physical_position.y,
+                monitor.physical_width,
+                monitor.physical_height,
+            )
+        })
 }

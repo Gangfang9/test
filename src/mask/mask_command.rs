@@ -1,4 +1,8 @@
-use bevy::{ecs::system::SystemParam, prelude::*, window::{PrimaryWindow, WindowLevel}};
+use bevy::{
+    ecs::system::SystemParam,
+    prelude::*,
+    window::{Monitor, PrimaryMonitor, PrimaryWindow, WindowLevel},
+};
 use bevy_ineffable::prelude::IneffableCommands;
 use rust_i18n::t;
 
@@ -58,12 +62,8 @@ pub struct PendingWindowFocus {
 #[derive(SystemParam)]
 pub(crate) struct NativeWindowUi<'w, 's> {
     pending_focus: ResMut<'w, PendingWindowFocus>,
-    projection: Query<
-        'w,
-        's,
-        &'static mut Node,
-        With<ProjectionBodyMarker>,
-    >,
+    monitors: Query<'w, 's, (&'static Monitor, Option<&'static PrimaryMonitor>)>,
+    projection: Query<'w, 's, &'static mut Node, With<ProjectionBodyMarker>>,
 }
 
 impl TitlebarState {
@@ -100,6 +100,33 @@ pub fn handle_mask_command(
             } => {
                 let content_width = (right - left) as f32;
                 let content_height = (bottom - top) as f32;
+                let scale = window.resolution.scale_factor() as f32;
+                let reachable = native_ui.monitors.iter().any(|(monitor, _)| {
+                    titlebar_reachable(
+                        logical_to_physical_i32(left as f32, scale),
+                        logical_to_physical_i32(top as f32, scale),
+                        logical_to_physical_i32(content_width, scale),
+                        monitor.physical_position.x,
+                        monitor.physical_position.y,
+                        monitor.physical_width,
+                        monitor.physical_height,
+                    )
+                });
+                let (left, top) = if !reachable && !native_ui.monitors.is_empty() {
+                    let (monitor, _) = native_ui
+                        .monitors
+                        .iter()
+                        .find(|(_, primary)| primary.is_some())
+                        .or_else(|| native_ui.monitors.iter().next())
+                        .unwrap();
+                    log::warn!("[Mask] restoring unreachable projection position ({left}, {top})");
+                    (
+                        physical_to_logical_i32(monitor.physical_position.x + 60, scale),
+                        physical_to_logical_i32(monitor.physical_position.y + 60, scale),
+                    )
+                } else {
+                    (left, top)
+                };
 
                 apply_titlebar_dimensions(
                     &mut window,
@@ -235,7 +262,9 @@ pub fn handle_mask_command(
                     // never re-enable the retired in-content imitation.
                     titlebar_state.visible = false;
                     oneshot_tx
-                        .send(Ok("[Mask] Windows native titlebar is always enabled".to_string()))
+                        .send(Ok(
+                            "[Mask] Windows native titlebar is always enabled".to_string()
+                        ))
                         .unwrap();
                     continue;
                 }
@@ -327,4 +356,43 @@ pub fn physical_to_logical_i32(value: i32, scale_factor: f32) -> i32 {
 
 fn logical_to_physical_i32(value: f32, scale_factor: f32) -> i32 {
     (value * scale_factor).round() as i32
+}
+
+// Preserve valid negative multi-monitor positions, but never persist the
+// Windows minimized sentinel or a title bar outside every active monitor.
+pub fn titlebar_reachable(x: i32, y: i32, width: i32, mx: i32, my: i32, mw: u32, mh: u32) -> bool {
+    let (x, y, width, mx, my, mw, mh) = (
+        x as i64,
+        y as i64,
+        width as i64,
+        mx as i64,
+        my as i64,
+        mw as i64,
+        mh as i64,
+    );
+    width > 0
+        && mw > 0
+        && mh > 0
+        && (x + width).min(mx + mw) - x.max(mx) >= 32
+        && y >= my
+        && y + 24 <= my + mh
+}
+
+#[cfg(test)]
+mod position_tests {
+    use super::titlebar_reachable;
+    #[test]
+    fn minimized_and_removed_monitor_positions_are_not_saved() {
+        assert!(!titlebar_reachable(-32000, -31970, 1334, 0, 0, 1920, 1080));
+        assert!(!titlebar_reachable(2500, 100, 800, 0, 0, 1920, 1080));
+        assert!(!titlebar_reachable(100, -900, 800, 0, 0, 1920, 1080));
+        assert!(titlebar_reachable(100, 100, 1334, 0, 0, 1920, 1080));
+    }
+    #[test]
+    fn negative_monitor_coordinates_remain_valid() {
+        assert!(titlebar_reachable(
+            -1800, -900, 800, -1920, -1080, 1920, 1080
+        ));
+        assert!(titlebar_reachable(-79, 78, 1334, 0, 0, 1920, 1080));
+    }
 }
