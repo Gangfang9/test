@@ -114,7 +114,8 @@ impl Plugin for MappingPlugins {
                     script::handle_script_trigger,
                 )
                     .in_set(CursorFrameSet::HandleMappings)
-                    .run_if(in_state(MappingState::Normal)),
+                    .run_if(in_state(MappingState::Normal))
+                    .run_if(not(crate::mask::companion::pointer_mode)),
             )
             // handlers in raw input mode
             .add_systems(
@@ -125,7 +126,9 @@ impl Plugin for MappingPlugins {
                 )
                     .in_set(CursorFrameSet::HandleMappings)
                     .run_if(
-                        in_state(MappingState::RawInput).and_then(not(in_state(CursorState::Fps))),
+                        in_state(MappingState::RawInput)
+                            .and_then(not(in_state(CursorState::Fps)))
+                            .and_then(not(crate::mask::companion::pointer_mode)),
                     ),
             )
             .add_systems(

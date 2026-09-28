@@ -96,7 +96,9 @@ impl Plugin for CursorPlugins {
                 handle_cursor_normal
                     .in_set(CursorFrameSet::UpdatePosition)
                     .run_if(
-                        not(in_state(MappingState::Stop)).and_then(in_state(CursorState::Normal)),
+                        not(in_state(MappingState::Stop))
+                            .or_else(crate::mask::companion::pointer_mode)
+                            .and_then(in_state(CursorState::Normal)),
                     ),
             )
             .add_systems(
@@ -115,6 +117,7 @@ impl Plugin for CursorPlugins {
                 Update,
                 handle_normal_left_click
                     .in_set(CursorFrameSet::HandleMappings)
+                    .run_if(not(crate::mask::companion::pointer_mode))
                     .run_if(
                         not(in_state(MappingState::Stop)).and_then(in_state(CursorState::Normal)),
                     ),
@@ -127,6 +130,7 @@ impl Plugin for CursorPlugins {
                         in_state(CursorState::Fps)
                             .and_then(in_state(MappingState::Normal))
                             .and_then(run_if_handle_cursor_fps)
+                            .and_then(not(crate::mask::companion::pointer_mode))
                             .and_then(mask_not_resizing),
                     ),
             )

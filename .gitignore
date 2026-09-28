@@ -12,3 +12,9 @@ assets/lib
 .codex
 AGENTS.md
 CLAUDE.md
+
+android-companion/.gradle/
+android-companion/**/build/
+android-companion/local.properties
+android-companion/*.p12
+android-companion/*.jks

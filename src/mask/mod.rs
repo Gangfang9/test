@@ -1,3 +1,4 @@
+pub mod companion;
 pub mod mapping;
 pub mod mask_command;
 pub mod ui;
@@ -46,7 +47,11 @@ pub struct MaskPlugins;
 impl Plugin for MaskPlugins {
     fn build(&self, app: &mut App) {
         app.add_plugins(UiMaterialPlugin::<YuvVideoMaterial>::default())
-            .add_plugins((ui::UiPlugins, mapping::MappingPlugins))
+            .add_plugins((
+                ui::UiPlugins,
+                mapping::MappingPlugins,
+                companion::CompanionPlugin,
+            ))
             .init_resource::<PendingWindowFocus>()
             .init_resource::<MaskResizeState>()
             .configure_sets(
@@ -98,7 +103,10 @@ fn handle_projection_window_close(
     d_tx: Res<ChannelSenderD>,
 ) {
     let (projection_entity, mut window) = projection_window.into_inner();
-    if !close_events.read().any(|event| event.window == projection_entity) {
+    if !close_events
+        .read()
+        .any(|event| event.window == projection_entity)
+    {
         return;
     }
 

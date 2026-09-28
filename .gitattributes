@@ -6,3 +6,5 @@ assets/icons/** binary
 assets/fonts/** binary
 docs/ui/** binary
 assets/JXZS-server-* binary
+android-companion/**/*.png binary
+android-companion/**/*.jar binary
