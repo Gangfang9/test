@@ -79,22 +79,80 @@ pub struct ChannelSenderCS(pub broadcast::Sender<ScrcpyControlMsg>);
 #[derive(Clone, Default)]
 pub struct LatestVideoFrame {
     inner: Arc<LatestVideoFrameInner>,
+    epoch: u64,
 }
 
 #[derive(Default)]
 struct LatestVideoFrameInner {
-    slot: Mutex<Option<VideoMsg>>,
+    slot: Mutex<FrameSlot>,
     buffers: Mutex<Vec<Vec<u8>>>,
 }
 
+#[derive(Default)]
+struct FrameSlot {
+    epoch: u64,
+    msg: Option<VideoMsg>,
+    progress: VideoProgress,
+}
+
+#[derive(Clone, Copy, Default, Debug)]
+pub struct VideoProgress {
+    pub packets: u64,
+    pub decoded: u64,
+    pub displayed: u64,
+    pub last_packet: Option<std::time::Instant>,
+    pub last_decode: Option<std::time::Instant>,
+    pub last_display: Option<std::time::Instant>,
+}
+
 impl LatestVideoFrame {
+    pub fn begin_session(&self) -> Self {
+        let mut slot = self.inner.slot.lock().unwrap();
+        let old = slot.msg.take();
+        slot.epoch += 1;
+        slot.progress = VideoProgress::default();
+        let epoch = slot.epoch;
+        drop(slot);
+        self.recycle_msg(old);
+        Self {
+            inner: self.inner.clone(),
+            epoch,
+        }
+    }
+    pub fn record_packet(&self) {
+        let mut slot = self.inner.slot.lock().unwrap();
+        if slot.epoch == self.epoch {
+            slot.progress.packets += 1;
+            slot.progress.last_packet = Some(std::time::Instant::now());
+        }
+    }
+    pub fn progress(&self) -> VideoProgress {
+        self.inner.slot.lock().unwrap().progress
+    }
     pub fn send(&self, msg: VideoMsg) {
-        let old_msg = self.inner.slot.lock().unwrap().replace(msg);
+        let mut slot = self.inner.slot.lock().unwrap();
+        if self.epoch != 0 && self.epoch != slot.epoch {
+            drop(slot);
+            self.recycle_msg(Some(msg));
+            return;
+        }
+        if !matches!(&msg, VideoMsg::Close) {
+            slot.progress.decoded += 1;
+            slot.progress.last_decode = Some(std::time::Instant::now());
+        }
+        let old_msg = slot.msg.replace(msg);
+        drop(slot);
         self.recycle_msg(old_msg);
     }
 
     pub fn take(&self) -> Option<VideoMsg> {
-        self.inner.slot.lock().unwrap().take()
+        let mut slot = self.inner.slot.lock().unwrap();
+        let msg = slot.msg.take();
+        if msg.as_ref().is_some_and(|m| !matches!(m, VideoMsg::Close)) {
+            slot.progress.displayed += 1;
+            slot.progress.last_display = Some(std::time::Instant::now());
+        }
+        msg
     }
 
     pub fn take_buffer(&self, size: usize) -> Vec<u8> {
@@ -287,4 +345,24 @@ pub async fn check_for_update() -> Result<(), String> {
     UpdateInfo::set(info).await;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod projection_frame_tests {
+    use super::*;
+    #[test]
+    fn late_old_close_and_packets_cannot_overwrite_the_new_session() {
+        let frames = LatestVideoFrame::default();
+        let old = frames.begin_session();
+        old.record_packet();
+        let current = frames.begin_session();
+        old.send(VideoMsg::Close);
+        old.record_packet();
+        assert!(frames.take().is_none());
+        assert_eq!(current.progress().packets, 0);
+        current.record_packet();
+        current.send(VideoMsg::Close);
+        assert_eq!(current.progress().packets, 1);
+        assert!(matches!(frames.take(), Some(VideoMsg::Close)));
+    }
 }

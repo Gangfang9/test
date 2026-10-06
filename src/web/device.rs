@@ -1,4 +1,5 @@
 use std::{collections::BTreeMap, time::Duration};
+use tokio_util::sync::CancellationToken;
 
 use axum::{
     Json, Router,
@@ -13,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tokio::{
     sync::{broadcast, mpsc::UnboundedSender},
-    time::{sleep, timeout},
+    time::sleep,
 };
 
 use crate::{
@@ -23,27 +24,15 @@ use crate::{
         constant::Keycode,
         control_msg::ScrcpyControlMsg,
         controller::ControllerCommand,
-        device_action,
+        device_action, managed_adb,
         media::AudioCodec,
+        session::{self, ProjectionSession},
     },
     utils::{relate_to_root_path, share::ControlledDevice},
     web::{JsonResponse, WebServerError, ws::WebSocketNotification},
 };
 
 const SCRCPY_SERVER_VERSION: &str = "4.0";
-const ADB_OPERATION_TIMEOUT: Duration = Duration::from_secs(15);
-
-async fn run_adb_operation<F>(operation: F) -> Result<(), WebServerError>
-where
-    F: FnOnce() -> Result<(), String> + Send + 'static,
-{
-    let result = timeout(ADB_OPERATION_TIMEOUT, tokio::task::spawn_blocking(operation))
-        .await
-        .map_err(|_| WebServerError::internal_error("ADB 操作超时，请检查 USB 调试和设备连接".to_string()))?
-        .map_err(|e| WebServerError::internal_error(format!("ADB 操作线程失败: {e}")))?;
-    result.map_err(WebServerError::internal_error)
-}
-
 #[derive(Debug, Clone)]
 pub struct AppStateDevice {
     cs_tx: broadcast::Sender<ScrcpyControlMsg>,
@@ -73,34 +62,29 @@ pub fn routers(
 }
 
 async fn device_list() -> Result<JsonResponse, WebServerError> {
-    let controlled_devices = ControlledDevice::get_device_list().await;
-    let config = LocalConfig::get();
-    let all_devices = Adb::new(config.adb_path)
-        .devices()
-        .map_err(|e| WebServerError::internal_error(e))?
+    let all_devices = managed_adb::devices()
+        .await
+        .map_err(WebServerError::internal_error)?
         .into_iter()
         .filter(|device| is_usb_device_id(&device.id))
         .collect::<Vec<_>>();
-
     Ok(JsonResponse::success(
         t!("web.device.deviceListObtained"),
         Some(json!({
-            "controlled_devices": controlled_devices,
-            "adb_devices": all_devices,
+            "controlled_devices": ControlledDevice::get_device_list().await,
+            "adb_devices": all_devices, "projection": ProjectionSession::status(),
         })),
     ))
 }
 
 pub fn list_usb_devices() -> Result<Vec<Device>, String> {
     let config = LocalConfig::get();
-    Adb::new(config.adb_path)
-        .devices()
-        .map(|devices| {
-            devices
-                .into_iter()
-                .filter(|device| is_usb_device_id(&device.id))
-                .collect()
-        })
+    Adb::new(config.adb_path).devices().map(|devices| {
+        devices
+            .into_iter()
+            .filter(|device| is_usb_device_id(&device.id))
+            .collect()
+    })
 }
 
 pub async fn start_usb_device(
@@ -116,14 +100,12 @@ pub async fn start_usb_device(
 
 pub fn restart_adb_and_list_usb_devices() -> Result<Vec<Device>, String> {
     let config = LocalConfig::get();
-    Adb::new(config.adb_path)
-        .restart_server()
-        .map(|devices| {
-            devices
-                .into_iter()
-                .filter(|device| is_usb_device_id(&device.id))
-                .collect()
-        })
+    Adb::new(config.adb_path).restart_server().map(|devices| {
+        devices
+            .into_iter()
+            .filter(|device| is_usb_device_id(&device.id))
+            .collect()
+    })
 }
 
 fn gen_scid() -> String {
@@ -150,165 +132,216 @@ async fn _control_device(
     d_tx: &UnboundedSender<ControllerCommand>,
     ws_tx: &broadcast::Sender<WebSocketNotification>,
 ) -> Result<JsonResponse, WebServerError> {
-    let device_id = device_id.to_string();
-    let video = true;
-    let local_config = LocalConfig::get();
-    let audio = local_config.audio_enabled;
+    session::new_intent();
+    start_projection(device_id, 0, None, d_tx, ws_tx).await
+}
 
-    if !is_usb_device_id(&device_id) {
-        return Err(WebServerError::bad_request(
-            "The MVP supports physical USB ADB devices only".to_string(),
-        ));
-    }
-
-    let device_list = ControlledDevice::get_device_list().await;
-    if !device_list.is_empty() {
-        return Err(WebServerError::bad_request(
-            "The MVP supports one controlled device at a time".to_string(),
-        ));
-    }
-    let main = true;
-
-    // prepare for scrcpy app
-    let scid = gen_scid();
-    let scrcpy_path = relate_to_root_path([
-        "assets",
-        &format!("JXZS-server-v{}", SCRCPY_SERVER_VERSION),
-    ]);
-    let push_device = device_id.clone();
-    let push_path = scrcpy_path.to_str().unwrap().to_string();
-    run_adb_operation(move || {
-        Device::push(&push_device, &push_path, "/data/local/tmp/scrcpy-server.jar")
-    })
-    .await?;
-    log::info!("[WebServe] {}", t!("web.device.pushScrcpyServerSuccess"));
-
-    let remote = format!("localabstract:scrcpy_{}", scid);
-    let local = format!("tcp:{}", local_config.controller_port);
-    let reverse_device = device_id.clone();
-    let reverse_remote = remote.clone();
-    let reverse_local = local.clone();
-    run_adb_operation(move || {
-        Device::reverse(&reverse_device, &reverse_remote, &reverse_local)
-    })
-    .await?;
-    log::info!(
-        "[WebServe] {}",
-        t!("web.device.reverseSuccess", remote => remote, local => local)
-    );
-
-    let mut args = [
-        "CLASSPATH=/data/local/tmp/scrcpy-server.jar",
-        "app_process",
-        "/",
-        "com.genymobile.scrcpy.Server",
-    ]
-    .iter_mut()
-    .map(|arg| arg.to_string())
-    .collect::<Vec<String>>();
-
-    args.push(SCRCPY_SERVER_VERSION.to_string());
-    args.push(format!("scid={}", scid));
-    args.push(format!("video={}", video));
-    // The MVP always mirrors the physical main display. A persisted upstream
-    // `new_display` setting would create a virtual display whose rotation and
-    // touch coordinates do not match the phone screen.
-    args.push("display_id=0".to_string());
-    if local_config.capture_orientation >= 0 {
-        args.push(format!(
-            "capture_orientation=@{}",
-            local_config.capture_orientation
-        ));
-    }
-    args.push(format!("audio={}", audio));
-    args.push(format!("stay_awake={}", local_config.stay_awake));
-    args.push(format!(
-        "screen_off_timeout={}",
-        local_config.screen_off_timeout
-    ));
-    args.push(format!(
-        "power_off_on_close={}",
-        local_config.power_off_on_close
-    ));
-
-    // create device
-    let mut socket_id: Vec<String> = Vec::new();
-    let mut commands: Vec<ControllerCommand> = Vec::new();
-    if main {
-        let mut meta_flag = true;
-        if video {
-            socket_id.push("main_video".to_string());
-            commands.push(ControllerCommand::ConnectMainVideo(scid.clone(), meta_flag));
-            if meta_flag {
-                meta_flag = false;
-            }
-
-            // video shell args
-            args.push(format!("video_codec={}", local_config.video_codec));
-            args.push(format!("video_bit_rate={}", local_config.video_bit_rate));
-            if local_config.video_max_size > 0 {
-                args.push(format!("max_size={}", local_config.video_max_size));
-            }
-            if local_config.video_max_fps > 0 {
-                args.push(format!("max_fps={}", local_config.video_max_fps));
-            }
+pub async fn resume_usb_device(
+    device_id: &str,
+    retries: u8,
+    intent: u64,
+    d_tx: &UnboundedSender<ControllerCommand>,
+    ws_tx: &broadcast::Sender<WebSocketNotification>,
+) -> Result<(), String> {
+    // Recover only this USB transport. Never restart the shared daemon automatically.
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(6);
+    let mut reconnected = false;
+    loop {
+        if intent != session::intent() || !crate::membership::is_member() {
+            return Err("自动恢复已取消".into());
         }
-        if audio {
-            socket_id.push("main_audio".to_string());
-            commands.push(ControllerCommand::ConnectMainAudio(scid.clone(), meta_flag));
-            if meta_flag {
-                meta_flag = false;
+        let devices = managed_adb::devices().await?;
+        match devices
+            .iter()
+            .find(|d| d.id == device_id)
+            .map(|d| d.status.as_str())
+        {
+            Some("device") => break,
+            Some("unauthorized") => return Err("请在设备上允许 USB 调试授权".into()),
+            Some("offline") if !reconnected => {
+                reconnected = true;
+                let _ = managed_adb::run(
+                    Some(device_id),
+                    vec!["reconnect".into()],
+                    Some(Duration::from_secs(2)),
+                    CancellationToken::new(),
+                )
+                .await;
             }
+            _ => {}
+        }
+        if tokio::time::Instant::now() >= deadline {
+            return Err("设备仍离线，请检查 USB 连接和调试授权后再投屏".into());
+        }
+        sleep(Duration::from_millis(400)).await;
+    }
+    start_projection(device_id, retries, Some(intent), d_tx, ws_tx)
+        .await
+        .map(|_| ())
+        .map_err(|e| e.1)
+}
 
-            args.push(format!("audio_codec={}", local_config.audio_codec));
-            args.push(format!("audio_source={}", local_config.audio_source));
+async fn start_projection(
+    device_id: &str,
+    retries: u8,
+    intent: Option<u64>,
+    d_tx: &UnboundedSender<ControllerCommand>,
+    ws_tx: &broadcast::Sender<WebSocketNotification>,
+) -> Result<JsonResponse, WebServerError> {
+    let _operation = session::OPERATIONS
+        .try_lock()
+        .map_err(|_| WebServerError::bad_request("正在处理投屏或重启，请稍后重试".into()))?;
+    if !crate::membership::is_member() {
+        return Err(WebServerError::bad_request("会员验证已失效".into()));
+    }
+    if intent.is_some_and(|i| i != session::intent()) {
+        return Err(WebServerError::bad_request("自动恢复已取消".into()));
+    }
+    if !is_usb_device_id(device_id) {
+        return Err(WebServerError::bad_request("仅支持 USB 实体设备".into()));
+    }
+    let devices = managed_adb::devices()
+        .await
+        .map_err(WebServerError::internal_error)?;
+    match devices
+        .iter()
+        .find(|d| d.id == device_id)
+        .map(|d| d.status.as_str())
+    {
+        Some("device") => {}
+        Some("unauthorized") => {
+            return Err(WebServerError::bad_request(
+                "请在设备上允许 USB 调试授权".into(),
+            ));
+        }
+        _ => {
+            return Err(WebServerError::bad_request(
+                "设备离线，请重新连接 USB 或检查 USB 调试".into(),
+            ));
+        }
+    }
+    session::cleanup_pending(device_id)
+        .await
+        .map_err(WebServerError::internal_error)?;
+    if intent.is_some_and(|i| i != session::intent()) || !crate::membership::is_member() {
+        return Err(WebServerError::bad_request(
+            "投屏已取消或会员验证已失效".into(),
+        ));
+    }
+    let scid = gen_scid();
+    let projection = ProjectionSession::reserve(device_id.into(), scid.clone(), retries)
+        .map_err(WebServerError::bad_request)?;
+    let config = LocalConfig::get();
+    let preparation: Result<(), String> = async {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .map_err(|e| e.to_string())?;
+        let local = format!(
+            "tcp:{}",
+            listener.local_addr().map_err(|e| e.to_string())?.port()
+        );
+        let remote = format!("localabstract:scrcpy_{scid}");
+        let server =
+            relate_to_root_path(["assets", &format!("JXZS-server-v{SCRCPY_SERVER_VERSION}")]);
+        managed_adb::run(
+            Some(device_id),
+            vec![
+                "push".into(),
+                server.to_string_lossy().into_owned(),
+                "/data/local/tmp/scrcpy-server.jar".into(),
+            ],
+            Some(Duration::from_secs(8)),
+            projection.token.clone(),
+        )
+        .await?;
+        managed_adb::run(
+            Some(device_id),
+            vec!["reverse".into(), remote, local],
+            Some(Duration::from_secs(3)),
+            projection.token.clone(),
+        )
+        .await?;
+        if !crate::membership::is_member() || projection.token.is_cancelled() {
+            return Err("投屏已取消或会员验证已失效".into());
+        }
+        let mut args = vec![
+            format!("echo $$ > /data/local/tmp/jxzs-{scid}.pid;"),
+            "CLASSPATH=/data/local/tmp/scrcpy-server.jar".into(),
+            "exec".into(),
+            "app_process".into(),
+            "/".into(),
+            "com.genymobile.scrcpy.Server".into(),
+            SCRCPY_SERVER_VERSION.into(),
+            format!("scid={scid}"),
+            "video=true".into(),
+            "display_id=0".into(),
+            format!("audio={}", config.audio_enabled),
+            format!("stay_awake={}", config.stay_awake),
+            format!("screen_off_timeout={}", config.screen_off_timeout),
+            format!("power_off_on_close={}", config.power_off_on_close),
+            format!("video_codec={}", config.video_codec),
+            format!("video_bit_rate={}", config.video_bit_rate),
+        ];
+        if config.capture_orientation >= 0 {
+            args.push(format!(
+                "capture_orientation=@{}",
+                config.capture_orientation
+            ));
+        }
+        if config.video_max_size > 0 {
+            args.push(format!("max_size={}", config.video_max_size));
+        }
+        if config.video_max_fps > 0 {
+            args.push(format!("max_fps={}", config.video_max_fps));
+        }
+        if config.audio_enabled {
+            args.push(format!("audio_codec={}", config.audio_codec));
+            args.push(format!("audio_source={}", config.audio_source));
             args.push(format!(
                 "audio_dup={}",
-                local_config.audio_source.is_playback() && local_config.audio_dup
+                config.audio_source.is_playback() && config.audio_dup
             ));
-            if !matches!(local_config.audio_codec, AudioCodec::Raw) {
-                args.push(format!("audio_bit_rate={}", local_config.audio_bit_rate));
+            if !matches!(config.audio_codec, AudioCodec::Raw) {
+                args.push(format!("audio_bit_rate={}", config.audio_bit_rate));
             }
         }
-        socket_id.push("main_control".to_string());
-        commands.push(ControllerCommand::ConnectMainControl(
-            scid.clone(),
-            meta_flag,
-        ));
-    } else {
-        socket_id.push(format!("sub_control_{}", scid));
-        commands.push(ControllerCommand::ConnectSubControl(scid.clone()));
+        let mut sockets = vec!["main_video".into()];
+        if config.audio_enabled {
+            sockets.push("main_audio".into());
+        }
+        sockets.push("main_control".into());
+        ControlledDevice::add_device(device_id.into(), scid.clone(), true, sockets).await;
+        d_tx.send(ControllerCommand::StartProjection {
+            session: projection.clone(),
+            listener,
+            args,
+            audio: config.audio_enabled,
+        })
+        .map_err(|e| e.to_string())?;
+        Ok(())
     }
-
-    ControlledDevice::add_device(device_id.clone(), scid.clone(), main, socket_id).await;
-    // send command to controller server
-    for cmd in commands {
-        d_tx.send(cmd).unwrap();
+    .await;
+    if let Err(e) = preparation {
+        projection.token.cancel();
+        ControlledDevice::remove_device(&scid).await;
+        if managed_adb::cleanup(device_id, &scid).await.is_err() {
+            session::remember_cleanup(device_id, &scid);
+        }
+        projection.finish(e.clone());
+        let _ = ws_tx.send(WebSocketNotification::ScrcpyDeviceConnection {
+            scid,
+            main: true,
+            connected: false,
+        });
+        return Err(WebServerError::internal_error(e));
     }
-
-    // run scrcpy app
-    sleep(Duration::from_millis(500)).await;
-    log::info!("[WebServe] {}", t!("web.device.startingScrcpyApp"));
-
-    let h = Device::shell_process(&device_id, args);
-
-    let scid_copy = scid.clone();
-    let ws_tx_copy = ws_tx.clone();
-    tokio::spawn(async move {
-        h.await.unwrap().unwrap();
-        log::info!("[WebServe] {}", t!("web.device.removingDeviceAfterExit"));
-        ControlledDevice::remove_device(&scid_copy).await;
-        ws_tx_copy
-            .send(WebSocketNotification::ScrcpyDeviceConnection {
-                scid: scid_copy,
-                main,
-                connected: false,
-            })
-            .ok();
-    });
-
+    if let Err(e) = projection.wait_ready().await {
+        projection.stop();
+        let _ = projection.wait_stopped().await;
+        return Err(WebServerError::internal_error(e));
+    }
     Ok(JsonResponse::success(
-        t!("web.device.tryStartingScrcpy"),
+        "投屏已连接".into(),
         Some(json!({"scid": scid, "device_id": device_id})),
     ))
 }
@@ -378,29 +411,21 @@ struct PostDataDeControlDevice {
 
 async fn _decontrol_device(
     device_id: &str,
-    d_tx: &UnboundedSender<ControllerCommand>,
+    _d_tx: &UnboundedSender<ControllerCommand>,
 ) -> Result<JsonResponse, WebServerError> {
-    let device_list = ControlledDevice::get_device_list().await;
-    for device in device_list {
-        if device.device_id == device_id {
-            let scid = device.scid.clone();
-            if device.main {
-                d_tx.send(ControllerCommand::ShutdownMain(scid)).unwrap();
-            } else {
-                d_tx.send(ControllerCommand::ShutdownSub(scid)).unwrap();
-            }
-            ControlledDevice::remove_device(&device.scid).await;
-            return Ok(JsonResponse::success(
-                format!("{}: {}", t!("web.device.decontrolDevice"), device_id),
-                None,
-            ));
-        }
+    let _operation = session::OPERATIONS
+        .try_lock()
+        .map_err(|_| WebServerError::bad_request("正在处理设备操作，请稍后重试".into()))?;
+    if let Some(projection) = ProjectionSession::current().filter(|s| s.device_id == device_id) {
+        projection.stop();
+        projection
+            .wait_stopped()
+            .await
+            .map_err(WebServerError::internal_error)?;
+    } else {
+        session::new_intent();
     }
-    Err(WebServerError::bad_request(format!(
-        "{}: {}",
-        t!("web.device.deviceNotFound"),
-        device_id
-    )))
+    Ok(JsonResponse::success("投屏已停止".into(), None))
 }
 
 async fn decontrol_device(
@@ -836,22 +861,69 @@ async fn adb_pair(Json(payload): Json<PostDataAdbPair>) -> Result<JsonResponse, 
 }
 
 async fn adb_restart() -> Result<JsonResponse, WebServerError> {
-    let controlled_devices = ControlledDevice::get_device_list().await;
-    let config = LocalConfig::get();
-    match Adb::new(config.adb_path).restart_server() {
-        Ok(adb_devices) => Ok(JsonResponse::success(
-            t!("web.device.adbRestartSuccess"),
-            Some(json!({
-                "controlled_devices": controlled_devices,
-                "adb_devices": adb_devices,
-            })),
-        )),
-        Err(e) => Err(WebServerError::internal_error(format!(
-            "{}: {}",
-            t!("web.device.adbRestartFailed"),
-            e
-        ))),
+    let _operation = session::OPERATIONS
+        .try_lock()
+        .map_err(|_| WebServerError::bad_request("正在处理设备操作，请稍后重试".into()))?;
+    let selected = ProjectionSession::current().map(|s| s.device_id.clone());
+    ProjectionSession::stop_current()
+        .await
+        .map_err(WebServerError::internal_error)?;
+    let token = CancellationToken::new();
+    if let Some(device) = selected.as_deref() {
+        let _ = managed_adb::run(
+            Some(device),
+            vec!["reconnect".into()],
+            Some(Duration::from_secs(2)),
+            token.clone(),
+        )
+        .await;
     }
+    managed_adb::run(
+        None,
+        vec!["kill-server".into()],
+        Some(Duration::from_secs(2)),
+        token.clone(),
+    )
+    .await
+    .map_err(WebServerError::internal_error)?;
+    managed_adb::run(
+        None,
+        vec!["start-server".into()],
+        Some(Duration::from_secs(3)),
+        token,
+    )
+    .await
+    .map_err(WebServerError::internal_error)?;
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(8);
+    let adb_devices = loop {
+        let devices = managed_adb::devices()
+            .await
+            .map_err(WebServerError::internal_error)?;
+        if devices
+            .iter()
+            .any(|d| is_usb_device_id(&d.id) && d.status == "device")
+            || tokio::time::Instant::now() >= deadline
+        {
+            break devices;
+        }
+        sleep(Duration::from_millis(300)).await;
+    };
+    let message = if adb_devices
+        .iter()
+        .any(|d| is_usb_device_id(&d.id) && d.status == "device")
+    {
+        "USB 调试连接已恢复，可以重新投屏"
+    } else if adb_devices.iter().any(|d| d.status == "unauthorized") {
+        "ADB 已重启，请在设备上允许 USB 调试授权"
+    } else {
+        "ADB 已重启，但设备仍未上线，请重新连接 USB 或关闭再开启 USB 调试"
+    };
+    Ok(JsonResponse::success(
+        message.into(),
+        Some(json!({
+            "controlled_devices": ControlledDevice::get_device_list().await, "adb_devices": adb_devices, "projection": ProjectionSession::status(),
+        })),
+    ))
 }
 
 #[derive(Deserialize)]
@@ -862,8 +934,7 @@ struct PostDataId {
 async fn adb_screenshot(
     Json(payload): Json<PostDataId>,
 ) -> Result<impl IntoResponse, WebServerError> {
-    let image_bytes = capture_adb_screenshot(&payload.id)
-        .map_err(WebServerError::bad_request)?;
+    let image_bytes = capture_adb_screenshot(&payload.id).map_err(WebServerError::bad_request)?;
 
     let mut headers = HeaderMap::new();
     headers.insert("Content-Type", HeaderValue::from_static("image/png"));
@@ -892,32 +963,15 @@ pub fn capture_adb_screenshot(id: &str) -> Result<Vec<u8>, String> {
         .nth(1)
         .ok_or_else(|| "invalid display line".to_string())?;
 
-    Device::shell_logged(id, ["screencap", "-p", "-d", display_id, src]).map_err(|e| {
-        format!(
-            "{} {}: {}",
-            t!("web.device.screenshotError"),
-            id,
-            e
-        )
-    })?;
+    Device::shell_logged(id, ["screencap", "-p", "-d", display_id, src])
+        .map_err(|e| format!("{} {}: {}", t!("web.device.screenshotError"), id, e))?;
 
     let mut image_bytes = Vec::<u8>::new();
-    Device::pull(id, src.to_string(), &mut image_bytes).map_err(|e| {
-        format!(
-            "{}: {}",
-            t!("web.device.failedGetScreenshotFile"),
-            e
-        )
-    })?;
+    Device::pull(id, src.to_string(), &mut image_bytes)
+        .map_err(|e| format!("{}: {}", t!("web.device.failedGetScreenshotFile"), e))?;
 
-    Device::shell_logged(id, ["rm", src]).map_err(|e| {
-        format!(
-            "{} {}: {}",
-            t!("web.device.failedRemoveScreenshot"),
-            id,
-            e
-        )
-    })?;
+    Device::shell_logged(id, ["rm", src])
+        .map_err(|e| format!("{} {}: {}", t!("web.device.failedRemoveScreenshot"), id, e))?;
     Ok(image_bytes)
 }
 

@@ -80,32 +80,15 @@ impl ScrcpyConnection {
     async fn read_device_metadata(&mut self, scid: String) -> Result<(), String> {
         // read metadata (device name)
         let mut buf: [u8; 64] = [0; 64];
-        match self.socket.read(&mut buf).await {
-            Err(e) => Err(format!(
-                "{}: {}",
-                t!("scrcpy.failedToReadControlMetadata"),
-                e
-            )),
-            Ok(0) => Err(format!(
-                "{}: None",
-                t!("scrcpy.failedToReadControlMetadata")
-            )),
-            Ok(n) => {
-                let mut end = n;
-                while buf[end - 1] == 0 {
-                    end -= 1;
-                }
-                // update device name
-                if let Ok(device_name_raw) = std::str::from_utf8(&buf[..n]) {
-                    let device_name = device_name_raw.trim_end_matches(char::from(0));
-                    ControlledDevice::update_device_name(scid, device_name.to_string()).await;
-                } else {
-                    log::warn!("[Controller] {}", t!("scrcpy.invalidDeviceName"));
-                    ControlledDevice::update_device_name(scid, "INVALID_NAME".to_string()).await;
-                }
-                Ok(())
-            }
-        }
+        self.socket
+            .read_exact(&mut buf)
+            .await
+            .map_err(|e| format!("投屏设备元数据读取失败: {e}"))?;
+        let device_name = String::from_utf8_lossy(&buf)
+            .trim_end_matches(char::from(0))
+            .to_string();
+        ControlledDevice::update_device_name(scid, device_name).await;
+        Ok(())
     }
 
     async fn control_writer(
@@ -170,8 +153,9 @@ impl ScrcpyConnection {
                                     _ => {}
                                 };
                                 let data:Vec<u8> = msg.into();
-                                if let Err(e) = write_half.write_all(&data).await {
-                                    log::error!("[Controller] {}: {}", t!("scrcpy.controlConnWriteFailed"),e);
+                                match timeout(Duration::from_secs(2), write_half.write_all(&data)).await {
+                                    Ok(Ok(())) => {},
+                                    result => { log::error!("[Controller] control write failed: {:?}", result); break; }
                                 }
                         }
                         Err(RecvError::Lagged(skipped)) => {
@@ -210,11 +194,15 @@ impl ScrcpyConnection {
                     } = msg.clone()
                     {
                         ControlledDevice::update_device_size(scid, (width, height)).await;
-                        watch_tx.send((width, height)).unwrap();
+                        if watch_tx.send((width, height)).is_err() {
+                            break;
+                        }
                     }
                     // only forward other message from main device
                     if main {
-                        cr_tx.send(msg).unwrap();
+                        if cr_tx.send(msg).is_err() {
+                            break;
+                        }
                     }
                 }
                 Err(e) => {
@@ -248,7 +236,7 @@ impl ScrcpyConnection {
         mut self,
         cs_rx: broadcast::Receiver<ScrcpyControlMsg>,
         cr_tx: UnboundedSender<ScrcpyDeviceMsg>,
-        m_tx: crossbeam_channel::Sender<(MaskCommand, oneshot::Sender<Result<String, String>>)>,
+        _m_tx: crossbeam_channel::Sender<(MaskCommand, oneshot::Sender<Result<String, String>>)>,
         scid: String,
         main: bool,
         token: CancellationToken,
@@ -273,31 +261,12 @@ impl ScrcpyConnection {
             .map(|device| device.device_size)
             .unwrap_or((0, 0));
         let (watch_tx, watch_rx) = watch::channel::<(u32, u32)>(initial_device_size);
-        if main {
-            let (oneshot_tx, oneshot_rx) = oneshot::channel::<Result<String, String>>();
-            m_tx.send((
-                MaskCommand::DeviceConnectionChange { connect: true },
-                oneshot_tx,
-            ))
-            .unwrap();
-            oneshot_rx.await.unwrap().unwrap();
-        }
-
         tokio::select! {
             _ = Self::control_writer(write_half, token, cs_rx, watch_rx) => {finnal_token.cancel();}
             _ = Self::control_reader(read_half, token_copy, cr_tx, watch_tx, &scid, main) => {finnal_token.cancel();}
         }
 
         log::info!("[Controller] {}", t!("scrcpy.controlConnectionClosed"));
-        if main {
-            let (oneshot_tx, oneshot_rx) = oneshot::channel::<Result<String, String>>();
-            m_tx.send((
-                MaskCommand::DeviceConnectionChange { connect: false },
-                oneshot_tx,
-            ))
-            .unwrap();
-            oneshot_rx.await.unwrap().unwrap();
-        }
     }
 
     async fn video_handler(&mut self, v_tx: LatestVideoFrame) {
@@ -338,6 +307,7 @@ impl ScrcpyConnection {
         let (width, height) = loop {
             match read_media_packet(&mut self.socket).await {
                 Ok(media_packet) => {
+                    v_tx.record_packet();
                     if let Some(session) = media_packet.session() {
                         break (session.width, session.height);
                     }
@@ -362,6 +332,7 @@ impl ScrcpyConnection {
         loop {
             match read_media_packet(&mut self.socket).await {
                 Ok(media_packet) => {
+                    v_tx.record_packet();
                     if let Some(session) = media_packet.session() {
                         log::info!(
                             "[Controller] Video session: {}x{}, client_resize={}",
@@ -442,7 +413,7 @@ impl ScrcpyConnection {
         }
         v_tx.send(VideoMsg::Close);
         log::info!("[Controller] {}", t!("scrcpy.videoConnectionClosed"));
-        self.socket.shutdown().await.unwrap();
+        let _ = self.socket.shutdown().await;
     }
 
     async fn audio_handler(&mut self) -> Result<(), String> {
@@ -588,7 +559,7 @@ impl ScrcpyConnection {
             }
         }
         log::info!("[Controller] Audio connection closed");
-        self.socket.shutdown().await.unwrap();
+        let _ = self.socket.shutdown().await;
     }
 }
 
@@ -919,5 +890,36 @@ fn copy_plane(
         let dst_start = row * width_bytes;
         dst[dst_start..dst_start + width_bytes]
             .copy_from_slice(&src[src_start..src_start + width_bytes]);
+    }
+}
+
+#[cfg(test)]
+mod transport_tests {
+    use super::*;
+    #[tokio::test]
+    async fn split_metadata_does_not_consume_video_header() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let writer = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut metadata = [0u8; 64];
+            metadata[..6].copy_from_slice(b"tablet");
+            socket.write_all(&metadata[..3]).await.unwrap();
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+            socket.write_all(&metadata[3..]).await.unwrap();
+            socket.write_all(b"NEXT").await.unwrap();
+        });
+        let mut connection = ScrcpyConnection::new(TcpStream::connect(address).await.unwrap());
+        tokio::time::timeout(
+            std::time::Duration::from_secs(1),
+            connection.read_device_metadata("fixture-metadata".into()),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        let mut header = [0u8; 4];
+        connection.socket.read_exact(&mut header).await.unwrap();
+        assert_eq!(&header, b"NEXT");
+        writer.await.unwrap();
     }
 }

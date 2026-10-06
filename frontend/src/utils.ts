@@ -71,7 +71,7 @@ export async function requestPost<D = any>(
     if (responseType) {
       opt.responseType = responseType;
     }
-    opt.timeout = API_TIMEOUT_MS;
+    opt.timeout = /^\/api\/device\/(control_device|reconnect_device|adb_restart)$/.test(url) ? 45_000 : API_TIMEOUT_MS;
     return axios.post(url, data, opt);
   });
 }

@@ -31,6 +31,32 @@ use std::{
 
 static CONNECTED: AtomicBool = AtomicBool::new(false);
 static FRAME: OnceLock<Mutex<(PointerFrame, Instant)>> = OnceLock::new();
+static TRANSPORT_SESSION: Mutex<Option<String>> = Mutex::new(None);
+pub fn transport_active(scid: &str) -> bool {
+    TRANSPORT_SESSION.lock().unwrap().as_deref() == Some(scid)
+}
+struct TransportLease(String);
+impl TransportLease {
+    fn acquire(scid: &str) -> Option<Self> {
+        let mut active = TRANSPORT_SESSION.lock().unwrap();
+        if active.is_some()
+            || !crate::scrcpy::session::ProjectionSession::current()
+                .is_some_and(|s| s.scid == scid && !s.token.is_cancelled())
+        {
+            return None;
+        }
+        *active = Some(scid.into());
+        Some(Self(scid.into()))
+    }
+}
+impl Drop for TransportLease {
+    fn drop(&mut self) {
+        let mut active = TRANSPORT_SESSION.lock().unwrap();
+        if active.as_deref() == Some(&self.0) {
+            *active = None;
+        }
+    }
+}
 const POINTER_ID: u64 = u64::MAX - 3;
 
 #[derive(Clone, Copy, Serialize, Debug)]
@@ -232,7 +258,8 @@ fn start_transport() {
         let Some(device) = ControlledDevice::get_main_device_blocking() else {
             thread::sleep(Duration::from_millis(500)); continue;
         };
-        if !crate::membership::is_member() { thread::sleep(Duration::from_millis(500)); continue; }
+        if !crate::membership::is_member() || !crate::scrcpy::session::ProjectionSession::current().is_some_and(|s| s.scid == device.scid && !s.token.is_cancelled()) { thread::sleep(Duration::from_millis(500)); continue; }
+        let Some(_lease) = TransportLease::acquire(&device.scid) else { continue; };
         let Some(port) = adb(&device.device_id, &["forward", "tcp:0", "localabstract:jxzs_cursor_v1"])
             .and_then(|value| value.parse::<u16>().ok()) else {
             thread::sleep(Duration::from_secs(2)); continue;
@@ -247,7 +274,8 @@ fn start_transport() {
                 CONNECTED.store(true, Ordering::Release);
                 loop {
                     let current = ControlledDevice::get_main_device_blocking();
-                    if !current.is_some_and(|d| d.scid == device.scid && d.device_id == device.device_id) { break; }
+                    if !current.is_some_and(|d| d.scid == device.scid && d.device_id == device.device_id)
+                        || !crate::scrcpy::session::ProjectionSession::current().is_some_and(|s| s.scid == device.scid && !s.token.is_cancelled()) { break; }
                     let (mut frame, updated) = *FRAME.get().unwrap().lock().unwrap();
                     if updated.elapsed() > Duration::from_millis(250) || !crate::membership::is_member() { frame.visible = false; }
                     let mut bytes = serde_json::to_vec(&frame).unwrap(); bytes.push(b'\n');

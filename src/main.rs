@@ -1,4 +1,7 @@
-#![cfg_attr(all(target_os = "windows", not(debug_assertions)), windows_subsystem = "windows")]
+#![cfg_attr(
+    all(target_os = "windows", not(debug_assertions)),
+    windows_subsystem = "windows"
+)]
 
 use std::{
     fs::File,
@@ -13,6 +16,8 @@ use bevy::{
     prelude::*,
     window::{PresentMode, WindowLevel},
 };
+#[cfg(target_os = "windows")]
+use scrcpy_mask::desktop_webview::DesktopWebViewPlugin;
 use scrcpy_mask::{
     DEFAULT_LANGUAGE,
     config::LocalConfig,
@@ -25,13 +30,10 @@ use scrcpy_mask::{
     tokio_tasks::TokioTasksPlugin,
     utils::{
         ChannelReceiverM, ChannelReceiverV, ChannelSenderCS, ChannelSenderD, ChannelSenderM,
-        ChannelSenderWS,
-        LatestVideoFrame, relate_to_data_path,
+        ChannelSenderWS, LatestVideoFrame, relate_to_data_path,
     },
     web::{self, ws::WebSocketNotification},
 };
-#[cfg(target_os = "windows")]
-use scrcpy_mask::desktop_webview::DesktopWebViewPlugin;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tracing_appender::non_blocking::WorkerGuard;
 
@@ -99,7 +101,20 @@ fn select_available_server_ports(config: &LocalConfig) -> Option<(u16, u16)> {
 }
 
 fn log_custom_layer(_app: &mut App) -> Option<BoxedLayer> {
-    let file = File::create(relate_to_data_path(["app.log"])).unwrap_or_else(|e| {
+    let path = relate_to_data_path(["app.log"]);
+    for i in (1..=2).rev() {
+        let source = if i == 1 {
+            path.clone()
+        } else {
+            relate_to_data_path([format!("app.log.{}", i - 1)])
+        };
+        let target = relate_to_data_path([format!("app.log.{i}")]);
+        if source.exists() {
+            let _ = std::fs::remove_file(&target);
+            let _ = std::fs::rename(source, target);
+        }
+    }
+    let file = File::create(path).unwrap_or_else(|e| {
         panic!("Failed to create log file: {}", e);
     });
     let (non_blocking, guard) = tracing_appender::non_blocking(file);
@@ -167,6 +182,7 @@ fn main() {
         DefaultPlugins
             .set(LogPlugin {
                 custom_layer: log_custom_layer,
+                filter: "warn,scrcpy_mask=info".into(),
                 ..default()
             })
             .set(WindowPlugin {
@@ -223,8 +239,14 @@ fn main() {
     app.run();
     // Tell the cloud service that this PC has exited. The local grant is
     // cleared even if the network is unavailable.
-    if let Ok(runtime) = tokio::runtime::Builder::new_current_thread().enable_all().build() {
-        runtime.block_on(scrcpy_mask::membership::shutdown_logout());
+    if let Ok(runtime) = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+    {
+        runtime.block_on(async {
+            let _ = scrcpy_mask::scrcpy::session::ProjectionSession::stop_current().await;
+            scrcpy_mask::membership::shutdown_logout().await;
+        });
     }
 }
 
@@ -266,10 +288,10 @@ fn start_servers(mut commands: Commands) {
     web::Server::start(
         web_addr,
         cs_tx.clone(),
-        d_tx,
+        d_tx.clone(),
         m_tx.clone(),
         ws_tx.clone(),
         false,
     );
-    controller::Controller::start(controller_addr, cs_tx, v_channel, d_rx, m_tx, ws_tx);
+    controller::Controller::start(controller_addr, cs_tx, v_channel, d_tx, d_rx, m_tx, ws_tx);
 }

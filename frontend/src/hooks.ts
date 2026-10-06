@@ -1,12 +1,13 @@
 import type { MessageInstance } from "antd/es/message/interface";
 import { createContext, useCallback, useContext, useEffect, useRef } from "react";
 import { useAppDispatch, useAppSelector } from "./store/store";
-import { setAdbDevices, setBackgroundImage, setControlledDevices, setDeviceRotation, setIsLoading } from "./store/other";
+import { setBackgroundImage, setDeviceRotation, setIsLoading } from "./store/other";
 import { forceSetLocalConfig } from "./store/localConfig";
 import { useTranslation } from "react-i18next";
 import { requestGet, requestPost } from "./utils";
 import { createFromIconfontCN } from "@ant-design/icons";
 import i18n from "./i18n";
+import { syncDeviceState } from "./deviceState";
 
 export const MessageContext = createContext<MessageInstance | null>(null);
 export const useMessageContext = () => useContext(MessageContext);
@@ -70,23 +71,7 @@ export function useDeviceWebSocket() {
   const mountedRef = useRef(true);
 
   const refreshDevices = useCallback(async () => {
-    try {
-      const res = await requestGet<{
-        controlled_devices: Array<{
-          device_id: string;
-          device_size: [number, number];
-          main: boolean;
-          name: string;
-          scid: string;
-          socket_ids: string[];
-        }>;
-        adb_devices: Array<{ id: string; status: string }>;
-      }>("/api/device/device_list");
-      dispatch(setControlledDevices(res.data.controlled_devices));
-      dispatch(setAdbDevices(res.data.adb_devices));
-    } catch {
-      // silent refresh on ws trigger
-    }
+    try { await syncDeviceState(dispatch); } catch { /* Device state refresh is silent. */ }
   }, [dispatch]);
 
   const refreshConfig = useCallback(async () => {
@@ -110,7 +95,7 @@ export function useDeviceWebSocket() {
         const msg = JSON.parse(event.data);
         switch (msg.type) {
           case "ScrcpyDeviceList":
-            dispatch(setControlledDevices(msg.devices));
+            refreshDevices();
             break;
           case "ScrcpyDeviceConnection":
             refreshDevices();
@@ -144,19 +129,26 @@ export function useDeviceWebSocket() {
       ws.close();
     };
 
+    ws.onopen = () => { refreshDevices(); };
     wsRef.current = ws;
   }, [refreshDevices, refreshConfig]);
 
   useEffect(() => {
     mountedRef.current = true;
     connect();
-
+    let pending = false;
+    const poll = window.setInterval(async () => {
+      if (pending || !mountedRef.current) return;
+      pending = true;
+      try { await refreshDevices(); } finally { pending = false; }
+    }, 3000);
     return () => {
+      window.clearInterval(poll);
       mountedRef.current = false;
       if (reconnectTimerRef.current !== null) {
         clearTimeout(reconnectTimerRef.current);
       }
       wsRef.current?.close();
     };
-  }, [connect]);
+  }, [connect, refreshDevices]);
 }

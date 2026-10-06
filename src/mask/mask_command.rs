@@ -34,6 +34,7 @@ pub enum MaskCommand {
     },
     DeviceConnectionChange {
         connect: bool,
+        scid: String,
     },
     GetActiveMapping,
     GetScaleFactor,
@@ -64,6 +65,7 @@ pub(crate) struct NativeWindowUi<'w, 's> {
     pending_focus: ResMut<'w, PendingWindowFocus>,
     monitors: Query<'w, 's, (&'static Monitor, Option<&'static PrimaryMonitor>)>,
     projection: Query<'w, 's, &'static mut Node, With<ProjectionBodyMarker>>,
+    disconnect_acks: Local<'s, Vec<tokio::sync::oneshot::Sender<Result<String, String>>>>,
 }
 
 impl TitlebarState {
@@ -90,6 +92,9 @@ pub fn handle_mask_command(
     mut native_ui: NativeWindowUi,
     runtime: ResMut<TokioTasksRuntime>,
 ) {
+    for ack in native_ui.disconnect_acks.drain(..) {
+        let _ = ack.send(Ok("投屏已停止".into()));
+    }
     for (msg, oneshot_tx) in m_rx.0.try_iter() {
         match msg {
             MaskCommand::WinMove {
@@ -148,7 +153,7 @@ pub fn handle_mask_command(
                 .to_string();
 
                 log::info!("[Mask] {}", msg);
-                oneshot_tx.send(Ok(msg)).unwrap();
+                oneshot_tx.send(Ok(msg)).ok();
             }
             MaskCommand::WinSwitchLevel { top } => {
                 if top {
@@ -158,9 +163,15 @@ pub fn handle_mask_command(
                 }
                 let msg = format!("[Mask] {}: {}", t!("mask.windowLevelChanged"), top);
                 log::info!("{}", msg);
-                oneshot_tx.send(Ok(msg)).unwrap();
+                oneshot_tx.send(Ok(msg)).ok();
             }
-            MaskCommand::DeviceConnectionChange { connect } => {
+            MaskCommand::DeviceConnectionChange { connect, scid } => {
+                if !crate::scrcpy::session::ProjectionSession::current()
+                    .is_some_and(|s| s.scid == scid)
+                {
+                    let _ = oneshot_tx.send(Ok("旧投屏通知已忽略".into()));
+                    continue;
+                }
                 let msg = if connect {
                     next_mapping_state.set(MappingState::Normal);
                     log::info!("[Mapping] {}", t!("mask.enterNormalMappingMode"));
@@ -186,15 +197,19 @@ pub fn handle_mask_command(
                     t!("mask.mainDeviceDisconnected").to_string()
                 };
                 log::info!("[Mask] {}", msg);
-                oneshot_tx.send(Ok(msg)).unwrap();
+                if connect {
+                    let _ = oneshot_tx.send(Ok(msg));
+                } else {
+                    native_ui.disconnect_acks.push(oneshot_tx);
+                }
             }
             MaskCommand::GetActiveMapping => {
-                oneshot_tx.send(Ok(active_mapping.1.clone())).unwrap();
+                oneshot_tx.send(Ok(active_mapping.1.clone())).ok();
             }
             MaskCommand::GetScaleFactor => {
                 oneshot_tx
                     .send(Ok(window.resolution.scale_factor().to_string()))
-                    .unwrap();
+                    .ok();
             }
             MaskCommand::LoadAndActivateMappingConfig { file_name } => {
                 log::info!(
@@ -207,17 +222,17 @@ pub fn handle_mask_command(
                         ineffable.set_config(&input_config);
                         active_mapping.0 = Some(mapping_config);
                         active_mapping.1 = file_name;
-                        oneshot_tx.send(Ok(String::new())).unwrap();
+                        oneshot_tx.send(Ok(String::new())).ok();
                     }
                     Err(e) => {
-                        oneshot_tx.send(Err(e)).unwrap();
+                        oneshot_tx.send(Err(e)).ok();
                     }
                 }
             }
             MaskCommand::RunScript { script } => {
                 let ast = match ScriptAST::new(&script) {
                     Err(e) => {
-                        oneshot_tx.send(Err(e)).unwrap();
+                        oneshot_tx.send(Err(e)).ok();
                         return;
                     }
                     Ok(ast) => ast,
@@ -253,7 +268,7 @@ pub fn handle_mask_command(
                 } else {
                     oneshot_tx
                         .send(Err(t!("mask.runScriptnoMappingError").to_string()))
-                        .unwrap();
+                        .ok();
                 }
             }
             MaskCommand::ToggleTitlebar => {
@@ -265,7 +280,7 @@ pub fn handle_mask_command(
                         .send(Ok(
                             "[Mask] Windows native titlebar is always enabled".to_string()
                         ))
-                        .unwrap();
+                        .ok();
                     continue;
                 }
                 let new_visible = !titlebar_state.visible;
@@ -301,7 +316,7 @@ pub fn handle_mask_command(
                 );
 
                 let msg = format!("[Mask] Titlebar visible: {}", new_visible);
-                oneshot_tx.send(Ok(msg)).unwrap();
+                oneshot_tx.send(Ok(msg)).ok();
             }
         }
     }

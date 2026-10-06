@@ -1,5 +1,6 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import type { AdbDevice, ControlledDevice } from "../utils";
+import type { ProjectionStatus } from "../deviceState";
 
 export interface DeviceRotation {
   rotation: number;
@@ -9,6 +10,7 @@ export interface DeviceRotation {
 
 export interface OtherState {
   isLoading: boolean;
+  projection: ProjectionStatus;
   maskArea: {
     width: number;
     height: number;
@@ -32,6 +34,7 @@ export interface OtherState {
 
 const initialState: OtherState = {
   isLoading: false,
+  projection: { phase: "idle", scid: null, message: "" },
   maskArea: {
     width: 1,
     height: 1,
@@ -57,6 +60,9 @@ const otherSlice = createSlice({
   name: "other",
   initialState,
   reducers: {
+    setProjection: (state, action: PayloadAction<ProjectionStatus>) => {
+      state.projection = action.payload;
+    },
     setIsLoading: (state, action: PayloadAction<OtherState["isLoading"]>) => {
       state.isLoading = action.payload;
     },
@@ -105,6 +111,7 @@ const otherSlice = createSlice({
 });
 
 export const {
+  setProjection,
   setIsLoading,
   setMaskArea,
   setBackgroundImage,

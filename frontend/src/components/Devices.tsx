@@ -18,7 +18,6 @@ import {
 } from "antd";
 import { useTranslation } from "react-i18next";
 import {
-  requestGet,
   requestPost,
   type AdbDevice,
   type AndroidApp,
@@ -46,10 +45,11 @@ import {
 } from "@ant-design/icons";
 import IconButton from "./common/IconButton";
 import { useEffect, useMemo, useState } from "react";
-import { setAdbDevices, setControlledDevices, setIsLoading } from "../store/other";
+import { setAdbDevices, setControlledDevices, setProjection, setIsLoading } from "../store/other";
 import { useMessageContext } from "../hooks";
 import { useAppDispatch, useAppSelector } from "../store/store";
 import { useLocation, useNavigate } from "react-router-dom";
+import { beginDeviceOperation, endDeviceOperation, syncDeviceState, type ProjectionStatus } from "../deviceState";
 
 function ControlledDevices({
   isVideo,
@@ -285,6 +285,7 @@ function ControlledDevices({
   ];
 
   async function decontrolDevice(device_id: string) {
+    if (!beginDeviceOperation()) return;
     dispatch(setIsLoading(true));
     try {
       const res = await requestPost("/api/device/decontrol_device", {
@@ -293,11 +294,15 @@ function ControlledDevices({
       messageApi?.success(res.message);
     } catch (error) {
       messageApi?.error(error as string);
+    } finally {
+      endDeviceOperation();
+      dispatch(setIsLoading(false));
+      try { await syncDeviceState(dispatch); } catch { /* Retry on the next device poll. */ }
     }
-    dispatch(setIsLoading(false));
   }
 
   async function reconnectDevice(device_id: string) {
+    if (!beginDeviceOperation()) return;
     dispatch(setIsLoading(true));
     try {
       const res = await requestPost("/api/device/reconnect_device", {
@@ -308,8 +313,11 @@ function ControlledDevices({
       messageApi?.success(res.message);
     } catch (error) {
       messageApi?.error(error as string);
+    } finally {
+      endDeviceOperation();
+      dispatch(setIsLoading(false));
+      try { await syncDeviceState(dispatch); } catch { /* Retry on the next device poll. */ }
     }
-    dispatch(setIsLoading(false));
   }
 
   const columns: TableProps<ControlledDevice>["columns"] = [
@@ -517,7 +525,10 @@ function OtherDevices({
   const dispatch = useAppDispatch();
   const messageApi = useMessageContext();
 
+  const projection = useAppSelector((state) => state.other.projection);
+  const unavailable = ["starting", "streaming", "stopping"].includes(projection.phase);
   async function controlDevice(device: AdbDevice) {
+    if (!beginDeviceOperation()) return;
     dispatch(setIsLoading(true));
     try {
       const res = await requestPost("/api/device/control_device", {
@@ -529,7 +540,9 @@ function OtherDevices({
     } catch (error) {
       messageApi?.error(error as string);
     } finally {
+      endDeviceOperation();
       dispatch(setIsLoading(false));
+      try { await syncDeviceState(dispatch); } catch { /* Retry on the next device poll. */ }
     }
   }
 
@@ -540,9 +553,9 @@ function OtherDevices({
           <Flex vertical align="center" gap="small">
             <Badge color="gold" text="USB" />
             <MobileOutlined className="text-8 color-primary" />
-            <Typography.Text strong>{device.status === "device" ? "已连接" : device.status}</Typography.Text>
+            <Typography.Text strong>{device.status === "device" ? "已连接" : device.status === "offline" ? "USB 调试离线" : device.status === "unauthorized" ? "等待 USB 调试授权" : device.status}</Typography.Text>
             <Typography.Text type="secondary" copyable>{device.id}</Typography.Text>
-            <Button type="primary" icon={<LinkOutlined />} disabled={device.status !== "device"} onClick={() => controlDevice(device)}>
+            <Button type="primary" icon={<LinkOutlined />} disabled={device.status !== "device" || unavailable} onClick={() => controlDevice(device)}>
               投屏
             </Button>
           </Flex>
@@ -575,6 +588,7 @@ export default function Devices() {
     );
   }, [controlledDevices, adbDevices]);
 
+  const projection = useAppSelector((state) => state.other.projection);
   const audioEnabled = useAppSelector((state) => state.localConfig.audioEnabled);
 
   useEffect(() => {
@@ -582,35 +596,39 @@ export default function Devices() {
   }, [location.pathname]);
 
   async function refreshDevices() {
+    if (!beginDeviceOperation()) return;
     dispatch(setIsLoading(true));
     try {
-      const res = await requestGet<{
-        controlled_devices: ControlledDevice[];
-        adb_devices: AdbDevice[];
-      }>("/api/device/device_list");
-      dispatch(setControlledDevices(res.data.controlled_devices));
-      dispatch(setAdbDevices(res.data.adb_devices));
-      messageApi?.success(res.message);
+      const res = await syncDeviceState(dispatch, true);
+      if (res) messageApi?.success(res.message);
     } catch (error) {
       messageApi?.error(error as string);
+    } finally {
+      endDeviceOperation();
+      dispatch(setIsLoading(false));
     }
-    dispatch(setIsLoading(false));
   }
 
   async function restartAdbServer() {
+    if (!beginDeviceOperation()) return;
     dispatch(setIsLoading(true));
     try {
       const res = await requestPost<{
         controlled_devices: ControlledDevice[];
         adb_devices: AdbDevice[];
+        projection: ProjectionStatus;
       }>("/api/device/adb_restart");
       dispatch(setControlledDevices(res.data.controlled_devices));
       dispatch(setAdbDevices(res.data.adb_devices));
+      dispatch(setProjection(res.data.projection));
       messageApi?.success(res.message);
     } catch (error) {
       messageApi?.error(error as string);
+    } finally {
+      endDeviceOperation();
+      dispatch(setIsLoading(false));
+      try { await syncDeviceState(dispatch); } catch { /* Retry on the next device poll. */ }
     }
-    dispatch(setIsLoading(false));
   }
 
   return (
@@ -624,6 +642,7 @@ export default function Devices() {
           message={t("devices.mvp.message")}
           description={t("devices.mvp.description")}
         />
+        {projection.message && <Alert className="mb-4" type={projection.phase === "failed" ? "warning" : "info"} showIcon message={projection.message} />}
         <Space className="mb-6" wrap>
           <Button icon={<ReloadOutlined />} onClick={restartAdbServer}>
             {t("devices.adbTools.server.restart")}

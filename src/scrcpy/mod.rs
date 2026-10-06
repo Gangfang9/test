@@ -7,7 +7,10 @@ pub mod constant;
 pub mod control_msg;
 pub mod controller;
 pub mod device_action;
+pub mod managed_adb;
 pub mod media;
+pub mod projection;
+pub mod session;
 
 #[derive(Clone, Serialize, Debug)]
 pub struct ScrcpyDevice {
