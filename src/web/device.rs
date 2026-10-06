@@ -190,15 +190,15 @@ async fn start_projection(
 ) -> Result<JsonResponse, WebServerError> {
     let _operation = session::OPERATIONS
         .try_lock()
-        .map_err(|_| WebServerError::bad_request("正在处理投屏或重启，请稍后重试".into()))?;
+        .map_err(|_| WebServerError::bad_request("正在处理投屏或重启，请稍后重试"))?;
     if !crate::membership::is_member() {
-        return Err(WebServerError::bad_request("会员验证已失效".into()));
+        return Err(WebServerError::bad_request("会员验证已失效"));
     }
     if intent.is_some_and(|i| i != session::intent()) {
-        return Err(WebServerError::bad_request("自动恢复已取消".into()));
+        return Err(WebServerError::bad_request("自动恢复已取消"));
     }
     if !is_usb_device_id(device_id) {
-        return Err(WebServerError::bad_request("仅支持 USB 实体设备".into()));
+        return Err(WebServerError::bad_request("仅支持 USB 实体设备"));
     }
     let devices = managed_adb::devices()
         .await
@@ -210,13 +210,11 @@ async fn start_projection(
     {
         Some("device") => {}
         Some("unauthorized") => {
-            return Err(WebServerError::bad_request(
-                "请在设备上允许 USB 调试授权".into(),
-            ));
+            return Err(WebServerError::bad_request("请在设备上允许 USB 调试授权"));
         }
         _ => {
             return Err(WebServerError::bad_request(
-                "设备离线，请重新连接 USB 或检查 USB 调试".into(),
+                "设备离线，请重新连接 USB 或检查 USB 调试",
             ));
         }
     }
@@ -224,9 +222,7 @@ async fn start_projection(
         .await
         .map_err(WebServerError::internal_error)?;
     if intent.is_some_and(|i| i != session::intent()) || !crate::membership::is_member() {
-        return Err(WebServerError::bad_request(
-            "投屏已取消或会员验证已失效".into(),
-        ));
+        return Err(WebServerError::bad_request("投屏已取消或会员验证已失效"));
     }
     let scid = gen_scid();
     let projection = ProjectionSession::reserve(device_id.into(), scid.clone(), retries)
@@ -341,7 +337,7 @@ async fn start_projection(
         return Err(WebServerError::internal_error(e));
     }
     Ok(JsonResponse::success(
-        "投屏已连接".into(),
+        "投屏已连接",
         Some(json!({"scid": scid, "device_id": device_id})),
     ))
 }
@@ -415,7 +411,7 @@ async fn _decontrol_device(
 ) -> Result<JsonResponse, WebServerError> {
     let _operation = session::OPERATIONS
         .try_lock()
-        .map_err(|_| WebServerError::bad_request("正在处理设备操作，请稍后重试".into()))?;
+        .map_err(|_| WebServerError::bad_request("正在处理设备操作，请稍后重试"))?;
     if let Some(projection) = ProjectionSession::current().filter(|s| s.device_id == device_id) {
         projection.stop();
         projection
@@ -425,7 +421,7 @@ async fn _decontrol_device(
     } else {
         session::new_intent();
     }
-    Ok(JsonResponse::success("投屏已停止".into(), None))
+    Ok(JsonResponse::success("投屏已停止", None))
 }
 
 async fn decontrol_device(
@@ -863,7 +859,7 @@ async fn adb_pair(Json(payload): Json<PostDataAdbPair>) -> Result<JsonResponse, 
 async fn adb_restart() -> Result<JsonResponse, WebServerError> {
     let _operation = session::OPERATIONS
         .try_lock()
-        .map_err(|_| WebServerError::bad_request("正在处理设备操作，请稍后重试".into()))?;
+        .map_err(|_| WebServerError::bad_request("正在处理设备操作，请稍后重试"))?;
     let selected = ProjectionSession::current().map(|s| s.device_id.clone());
     ProjectionSession::stop_current()
         .await
@@ -919,7 +915,7 @@ async fn adb_restart() -> Result<JsonResponse, WebServerError> {
         "ADB 已重启，但设备仍未上线，请重新连接 USB 或关闭再开启 USB 调试"
     };
     Ok(JsonResponse::success(
-        message.into(),
+        message,
         Some(json!({
             "controlled_devices": ControlledDevice::get_device_list().await, "adb_devices": adb_devices, "projection": ProjectionSession::status(),
         })),
